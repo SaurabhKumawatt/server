@@ -40,7 +40,7 @@ const courseSchema = new mongoose.Schema(
           default: "video",
         },
         contentUrl: String,
-        duration: String, // e.g. "10min"
+        duration: String,
         isLocked: {
           type: Boolean,
           default: false,
@@ -56,7 +56,7 @@ const courseSchema = new mongoose.Schema(
     },
     affiliateCommissionPercent: {
       type: Number,
-      default: 20, // for affiliates
+      default: 20,
     },
     tags: [String],
     instructor: {
@@ -71,6 +71,12 @@ const courseSchema = new mongoose.Schema(
       type: String,
       enum: ["draft", "published"],
       default: "draft",
+    },
+
+    // 🔽 New Field for YouTube Playlist
+    youtubePlaylistId: {
+      type: String,
+      default: null,
     },
   },
   { timestamps: true }

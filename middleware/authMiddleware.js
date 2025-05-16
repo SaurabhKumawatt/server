@@ -3,7 +3,7 @@ const User = require("../models/User");
 
 const protect = async (req, res, next) => {
   let token;
-
+  
   if (
     req.headers.authorization &&
     req.headers.authorization.startsWith("Bearer")
@@ -14,7 +14,7 @@ const protect = async (req, res, next) => {
       req.user = await User.findById(decoded.id).select("-password");
       next();
     } catch (error) {
-      console.error(error);
+      console.error("Token validation error:", error.message);
       return res.status(401).json({ message: "Not authorized, token failed" });
     }
   } else {

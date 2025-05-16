@@ -5,6 +5,8 @@ require("dotenv").config();
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const seedRoutes = require("./routes/seedRoutes");
+const userRoutes = require("./routes/authRoutes");
+const courseRoutes = require("./routes/authRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -20,6 +22,9 @@ app.get("/", (req, res) => {
 });
 app.use("/api/auth", authRoutes);
 app.use("/api/seed", seedRoutes);
+app.use("/api/user", userRoutes);
+app.use("/api/user", courseRoutes);
+app.use("/api/courses", courseRoutes);
 
 // Start Server
 app.listen(PORT, () => {

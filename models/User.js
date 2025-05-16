@@ -8,6 +8,12 @@ const userSchema = new mongoose.Schema(
             required: true,
             trim: true,
         },
+        username: {
+            type: String,
+            required: true,
+            unique: true,
+            trim: true,
+        },
         email: {
             type: String,
             required: true,
@@ -30,6 +36,15 @@ const userSchema = new mongoose.Schema(
             type: Boolean,
             default: false,
         },
+        kycStatus: {
+            type: String,
+            enum: ["pending", "approved", "rejected"],
+            default: "",
+        },
+        stravixId: {
+            type: String,
+            default: "STX0000123", // you can customize this format dynamically
+        },
         affiliateCode: {
             type: String,
             unique: true,
@@ -48,6 +63,19 @@ const userSchema = new mongoose.Schema(
             type: String,
             default: "",
         },
+        enrolledCourses: [
+            {
+                course: {
+                    type: mongoose.Schema.Types.ObjectId,
+                    ref: "Course",
+                },
+                progress: {
+                    type: Number,
+                    default: 0, // 0–100%
+                },
+            }
+        ],
+
     },
     {
         timestamps: true,
@@ -64,8 +92,8 @@ userSchema.pre("save", async function (next) {
 
 // Match password for login
 userSchema.methods.matchPassword = async function (enteredPassword) {
-  const result = await bcrypt.compare(enteredPassword, this.password);
-  console.log("🔐 Password Match:", result);
-  return result;
+    const result = await bcrypt.compare(enteredPassword, this.password);
+    console.log("🔐 Password Match:", result);
+    return result;
 };
 module.exports = mongoose.model("User", userSchema);

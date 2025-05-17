@@ -39,7 +39,7 @@ const userSchema = new mongoose.Schema(
         kycStatus: {
             type: String,
             enum: ["pending", "approved", "rejected"],
-            default: "",
+            default: "pending",
         },
         stravixId: {
             type: String,
@@ -50,11 +50,11 @@ const userSchema = new mongoose.Schema(
             unique: true,
             sparse: true,
         },
-        referredBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "User",
-            default: null,
-        },
+        // referredBy: {
+        //     type: mongoose.Schema.Types.ObjectId,
+        //     ref: "User",
+        //     default: null,
+        // },
         referralEarnings: {
             type: Number,
             default: 0,

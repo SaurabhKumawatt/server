@@ -10,7 +10,7 @@ const { getPlaylistVideos,  getCourseBySlug } = require("../controllers/courseCo
 
 const router = express.Router();
 
-router.post("/signup", registerUser);
+router.post("/signup/:slug", registerUser);
 router.post("/login", loginUser);
 router.get("/me", protect, getMe); // test token
 router.post("/manual-signup", upload.single("screenshot"), registerManualUser);

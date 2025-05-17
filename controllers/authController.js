@@ -16,7 +16,7 @@ exports.registerManualUser = async (req, res) => {
       mobile,
       state,
       dob,
-      referralCode,
+      // referralCode,
       selectedCourse,
       txnId,
     } = req.body;
@@ -40,9 +40,10 @@ exports.registerManualUser = async (req, res) => {
       phone: mobile,
       state,
       dob,
-      referredBy: referralCode || null,
+      // referredBy: referralCode || null,
       affiliateCode: uuidv4().slice(0, 6),
       isEmailVerified: true,
+      kycStatus: "approved",
     });
 
     const course = await Course.findOne({ slug: selectedCourse });

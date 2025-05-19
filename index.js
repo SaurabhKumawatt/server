@@ -26,6 +26,7 @@ app.use("/api/user", userRoutes);
 app.use("/api/user", courseRoutes);
 app.use("/api/courses", courseRoutes);
 
+
 // Start Server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

@@ -52,4 +52,5 @@ const getPlaylistVideos = async (req, res) => {
   }
 };
 
+
 module.exports = { getCourseBySlug, getPlaylistVideos };

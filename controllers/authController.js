@@ -153,3 +153,13 @@ exports.getMyCourses = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+
+exports.getAllCourses = async (req, res) => {
+  try {
+    const courses = await Course.find();
+    res.json(courses);
+  } catch (err) {
+    res.status(500).json({ message: "Server error fetching courses" });
+  }
+};

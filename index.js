@@ -28,7 +28,8 @@ app.use(cookieParser());
 // ✅ CORS Config
 app.use(
   cors({
-    origin: [BACKEND_CORS, "http://localhost:5173"],
+    // origin: [BACKEND_CORS, "http://localhost:5173"],
+    origin: "*",
     credentials: true,
   })
 );

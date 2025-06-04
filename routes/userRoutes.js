@@ -1,8 +1,9 @@
-console.log("🛠 Loading userRoutes");
+console.log("🛠️ Loading userRoutes");
 
 const express = require("express");
 const router = express.Router();
 
+// 🧠 Controllers
 const {
   registerUser,
   loginUser,
@@ -21,17 +22,23 @@ const {
   deleteLeadById,
 } = require("../controllers/userController");
 
+// 🔐 Middlewares
 const { protect } = require("../middleware/auth");
-const { uploadTo } = require("../middleware/multerMiddleware");
 const { authorizeRoles } = require("../middleware/roles");
+const { uploadTo } = require("../middleware/multerMiddleware");
 
 
+// ==============================
 // 👤 Auth Routes
+// ==============================
 router.post("/register", registerUser);
 router.post("/login", loginUser);
 router.get("/logout", logoutUser);
 
-// 🔐 Protected Routes
+
+// ==============================
+// 🔐 Authenticated User Routes
+// ==============================
 router.get("/me", protect, getLoggedInUserProfile);
 
 router.put(
@@ -43,9 +50,12 @@ router.put(
 
 router.put("/change-password", protect, changePassword);
 
+
+// ==============================
 // 🧾 KYC
+// ==============================
 router.get("/kyc-status", protect, getKycStatus);
-// router.post("/submit-kyc", protect, submitKycDetails);
+
 router.post(
   "/submit-kyc",
   protect,
@@ -57,7 +67,10 @@ router.post(
   submitKycDetails
 );
 
+
+// ==============================
 // 💼 Affiliate Features
+// ==============================
 router.get("/leads", protect, getAffiliateLeads);
 router.delete("/leads/:id", protect, deleteLeadById);
 router.get("/commissions", protect, getAffiliateCommissions);
@@ -66,7 +79,14 @@ router.post("/request-payout", protect, requestPayout);
 router.get("/sales-stats", protect, getSalesStats);
 
 
-// admin features
-router.patch('/:userId/industry-earnings', protect, authorizeRoles("admin"), updateIndustryEarnings);
+// ==============================
+// 🔐 Admin Features
+// ==============================
+router.patch(
+  "/:userId/industry-earnings",
+  protect,
+  authorizeRoles("admin"),
+  updateIndustryEarnings
+);
 
 module.exports = router;

@@ -1,82 +1,64 @@
 const express = require("express");
 const mongoose = require("mongoose");
+const dotenv = require("dotenv");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
-require("dotenv").config();
-const connectDB = require("./config/db");
 const cookieParser = require("cookie-parser");
 const path = require("path");
 
+// 🧠 Load env config
+require("dotenv").config({
+  path: process.env.NODE_ENV === "production" ? ".env.production" : ".env.local"
+});
 
+
+const connectDB = require("./config/db");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// === Load CORS domain from env
+const BACKEND_CORS = process.env.CLIENT_URL || "http://localhost:5173";
 
-// Route Imports
-const userRoutes = require("./routes/userRoutes");
-const courseRoutes = require("./routes/courseRoutes");
-const paymentRoutes = require("./routes/paymentRoutes");
-const enrollmentRoutes = require("./routes/enrollmentRoutes");
-
-// Security Headers
+// 🔒 Security
 app.use(helmet());
+app.use(cookieParser());
 
-
-
-// CORS
+// ✅ CORS Config
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
-    credentials: true, // ⬅️ Must be true for cookies
+    origin: [BACKEND_CORS, "http://localhost:5173"],
+    credentials: true,
   })
 );
-app.set("trust proxy", 1); // For rate-limit + IP handling
 
+// ✅ Rate Limiter
+app.set("trust proxy", 1);
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 1000,
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+);
 
-// 👇 Must be BEFORE express.json() — only for Razorpay
+// ✅ Connect MongoDB
+connectDB();
+
+// ✅ Razorpay Webhook: Raw body parser (must be before express.json)
 app.post(
   "/api/payments/verify",
   express.raw({ type: "application/json" }),
   require("./controllers/paymentController").verifyPayment
 );
 
-// Now parse everything else normally
+// ✅ Body parser
 app.use(express.json());
-app.use(cookieParser());
 
-
-// Connect DB
-connectDB();
-
-// Rate Limiting
-const limiter = rateLimit({
-  windowMs: 155 * 60 * 1000,
-  max: 1000,
-  standardHeaders: false,
-  legacyHeaders: false,
-});
-app.use(limiter);
-
-
-// Logging for unknown hits
-// app.use((req, res, next) => {
-//   console.log("🔍 Unknown route hit:", req.method, req.url);
-//   next();
-// });
-
-// Health check
-app.get("/", (req, res) => {
-  res.send("Stravix backend is running...");
-});
-
-// App routes
-app.use("/api/user", userRoutes);
+// === Static Files
 app.use("/uploads/profile", express.static(path.join(__dirname, "uploads/profile")));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-app.use("/api/courses", courseRoutes);
-app.use("/api/payments", paymentRoutes); // other payment routes
-app.use("/api/enrollments", enrollmentRoutes);
 app.use(
   "/uploads/course-thumbnails",
   express.static(path.join(__dirname, "uploads/course-thumbnails"), {
@@ -87,23 +69,34 @@ app.use(
   })
 );
 
-
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ message: "Route not found" });
+// === Health Check
+app.get("/", (req, res) => {
+  res.send("✅ Stravix backend is running...");
 });
 
-// Error handling
+// === Route Imports
+app.use("/api/user", require("./routes/userRoutes"));
+app.use("/api/courses", require("./routes/courseRoutes"));
+app.use("/api/payments", require("./routes/paymentRoutes"));
+app.use("/api/enrollments", require("./routes/enrollmentRoutes"));
+
+// === 404 Handler
+app.use((req, res, next) => {
+  res.status(404).json({ message: "❌ Route not found" });
+});
+
+// === Global Error Catchers
 process.on("unhandledRejection", (err) => {
-  console.error("UNHANDLED REJECTION 🔥", err.message);
+  console.error("❗ UNHANDLED REJECTION:", err.message);
   process.exit(1);
 });
 
 process.on("uncaughtException", (err) => {
-  console.error("UNCAUGHT EXCEPTION 💥", err.message);
+  console.error("💥 UNCAUGHT EXCEPTION:", err.message);
   process.exit(1);
 });
 
+// ✅ Start Server
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);
 });

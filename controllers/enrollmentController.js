@@ -1,4 +1,3 @@
-// File: controllers/enrollmentController.js
 const Enrollment = require("../models/Enrollments");
 const Course = require("../models/Course");
 const User = require("../models/User");
@@ -10,15 +9,18 @@ exports.getUserEnrollments = async (req, res) => {
     const enrollments = await Enrollment.find({ userId: req.user._id })
       .populate("courseId")
       .sort({ createdAt: -1 });
+
     res.json(enrollments);
   } catch (err) {
+    console.error("Error fetching enrollments:", err);
     res.status(500).json({ message: "Failed to fetch enrollments" });
   }
 };
 
-// ✅ User: Update progress in a course
+// ✅ User: Update progress
 exports.updateCourseProgress = async (req, res) => {
   const { courseId, progress } = req.body;
+
   try {
     const enrollment = await Enrollment.findOne({
       userId: req.user._id,
@@ -31,36 +33,43 @@ exports.updateCourseProgress = async (req, res) => {
 
     enrollment.progress = progress;
     await enrollment.save();
+
     res.json({ message: "Progress updated", enrollment });
   } catch (err) {
+    console.error("Progress update error:", err);
     res.status(400).json({ message: "Failed to update progress" });
   }
 };
 
-// 🔐 Admin: Get all enrollments
+// ✅ Admin: Get all enrollments
 exports.getAllEnrollments = async (req, res) => {
   try {
     const all = await Enrollment.find()
       .populate("userId courseId")
       .sort({ createdAt: -1 });
+
     res.json(all);
   } catch (err) {
+    console.error("Error fetching all enrollments:", err);
     res.status(500).json({ message: "Error fetching enrollments" });
   }
 };
 
-// 🔐 Admin: Get specific enrollment
+// ✅ Admin: Get one
 exports.getEnrollmentDetails = async (req, res) => {
   try {
-    const enrollment = await Enrollment.findById(req.params.id).populate("userId courseId");
+    const enrollment = await Enrollment.findById(req.params.id)
+      .populate("userId courseId");
+
     if (!enrollment) return res.status(404).json({ message: "Enrollment not found" });
     res.json(enrollment);
   } catch (err) {
+    console.error("Get enrollment details error:", err);
     res.status(500).json({ message: "Failed to retrieve enrollment" });
   }
 };
 
-// 🔐 Admin: Update status of enrollment
+// ✅ Admin: Update status
 exports.updateEnrollmentStatus = async (req, res) => {
   try {
     const enrollment = await Enrollment.findById(req.params.id);
@@ -71,11 +80,10 @@ exports.updateEnrollmentStatus = async (req, res) => {
 
     res.json({ message: "Status updated", enrollment });
   } catch (err) {
+    console.error("Enrollment status update error:", err);
     res.status(400).json({ message: "Failed to update status" });
   }
 };
-
-// ✅ Enroll via email
 exports.manualEnrollUserWithPayment = async (req, res) => {
   try {
     const { email, courseId, paymentDetails } = req.body;
@@ -132,7 +140,7 @@ exports.manualEnrollUserWithPayment = async (req, res) => {
       const dummyPayment = await Payment.create({
         user: user._id,
         course: bundle._id,
-        forBundleCourseId: courseId, // parent bundle
+        forBundleCourseId: courseId,
         amountPaid: 0,
         razorpayOrderId: `auto_${Date.now()}_${bundle._id}`,
         status: "captured",
@@ -165,8 +173,6 @@ exports.manualEnrollUserWithPayment = async (req, res) => {
     res.status(500).json({ message: "Manual enrollment failed" });
   }
 };
-
-// ✅ Unenroll via email
 exports.manualUnenrollUser = async (req, res) => {
   try {
     const { email, courseId } = req.body;

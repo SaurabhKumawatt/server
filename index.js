@@ -22,7 +22,6 @@ const enrollmentRoutes = require("./routes/enrollmentRoutes");
 // Security Headers
 app.use(helmet());
 
-console.log("hello from, index", BACKEND_CROS);
 
 
 // CORS

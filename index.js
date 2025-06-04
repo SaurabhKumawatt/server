@@ -29,7 +29,7 @@ app.use(cookieParser());
 app.use(
   cors({
     // origin: [BACKEND_CORS, "http://localhost:5173"],
-    origin: "*",
+    origin: "https://www.upthrivex.com",
     credentials: true,
   })
 );

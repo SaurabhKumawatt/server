@@ -26,13 +26,33 @@ app.use(helmet());
 app.use(cookieParser());
 
 // ✅ CORS Config
+// app.use(
+//   cors({
+    // origin: [BACKEND_CORS, "http://localhost:5173"],
+//     origin: "https://www.upthrivex.com",
+//     credentials: true,
+//   })
+// );
+
+const allowedOrigins = [
+  "https://www.upthrivex.com",
+  "http://localhost:5173",
+  "https://stravix-testing-client.vercel.app"
+];
+
 app.use(
   cors({
-    // origin: [BACKEND_CORS, "http://localhost:5173"],
-    origin: "https://www.upthrivex.com",
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   })
 );
+
 
 
 

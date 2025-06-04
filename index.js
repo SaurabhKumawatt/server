@@ -7,11 +7,15 @@ const rateLimit = require("express-rate-limit");
 const cookieParser = require("cookie-parser");
 const path = require("path");
 
+
 const allowedOrigins = [
-  "http://localhost:5173",
-  "https://stravix.in",
-  "https://main-stravix-client.vercel.app", // For main branch preview
-  "https://client-self-nine.vercel.app"     // ✅ Your current Vercel preview
+  "http://localhost:5173",                        // local dev
+  "https://stravix.in",                           // prod for master
+  "https://www.stravix.in",
+  "https://upthrivex.com",                        // ✅ prod for main
+  "https://www.upthrivex.com",
+  "https://client-self-nine.vercel.app",          // optional: Vercel preview
+  "https://main-stravix-client.vercel.app"        // optional: main branch preview
 ];
 
 // 🧠 Load env config

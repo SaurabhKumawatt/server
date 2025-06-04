@@ -8,16 +8,6 @@ const cookieParser = require("cookie-parser");
 const path = require("path");
 
 
-const allowedOrigins = [
-  "http://localhost:5173",                        // local dev
-  "https://stravix.in",                           // prod for master
-  "https://www.stravix.in",
-  "https://upthrivex.com",                        // ✅ prod for main
-  "https://www.upthrivex.com",
-  "https://client-self-nine.vercel.app",          // optional: Vercel preview
-  "https://main-stravix-client.vercel.app"        // optional: main branch preview
-];
-
 // 🧠 Load env config
 require("dotenv").config({
   path: process.env.NODE_ENV === "production" ? ".env.production" : ".env.local"
@@ -36,26 +26,14 @@ app.use(helmet());
 app.use(cookieParser());
 
 // ✅ CORS Config
-// app.use(
-//   cors({
-//     origin: [BACKEND_CORS, "http://localhost:5173"],
-//     credentials: true,
-//   })
-// );
-
-
 app.use(
   cors({
-    origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
+    origin: [BACKEND_CORS, "http://localhost:5173"],
     credentials: true,
   })
 );
+
+
 
 // ✅ Rate Limiter
 app.set("trust proxy", 1);

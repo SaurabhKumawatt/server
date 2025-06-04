@@ -51,7 +51,7 @@ connectDB();
 const limiter = rateLimit({
   windowMs: 155 * 60 * 1000,
   max: 1000,
-  standardHeaders: true,
+  standardHeaders: false,
   legacyHeaders: false,
 });
 app.use(limiter);

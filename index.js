@@ -28,7 +28,7 @@ app.use(helmet());
 app.use(
   cors({
     origin: process.env.CLIENT_URL || "http://localhost:5173",
-    credentials: true,
+    credentials: true, // ⬅️ Must be true for cookies
   })
 );
 app.set("trust proxy", 1); // For rate-limit + IP handling

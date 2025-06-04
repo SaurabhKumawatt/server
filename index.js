@@ -11,7 +11,7 @@ const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const BACKEND_CROS = process.env.BACKEND_CROS;
+
 
 // Route Imports
 const userRoutes = require("./routes/userRoutes");
@@ -22,10 +22,13 @@ const enrollmentRoutes = require("./routes/enrollmentRoutes");
 // Security Headers
 app.use(helmet());
 
+console.log("hello from, index", BACKEND_CROS);
+
+
 // CORS
 app.use(
   cors({
-    origin: BACKEND_CROS, // ✅ change in prod
+    origin: process.env.CLIENT_URL || "http://localhost:5173",
     credentials: true,
   })
 );

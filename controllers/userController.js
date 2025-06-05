@@ -28,7 +28,7 @@ exports.registerUser = async (req, res) => {
       return res.status(400).json({ message: "Email or username already exists" });
     }
 
-    const affiliateCode = `STX${Date.now().toString().slice(-6)}`;
+    const affiliateCode = `SV${Date.now().toString().slice(-6)}`;
     const newUser = await User.create({
       fullName, username, email, mobileNumber, password,
       sponsorCode, affiliateCode, address, state, dob,

@@ -20,6 +20,7 @@ const {
   updateLesson,
   deleteLesson,
   updateRelatedBundles,
+  getPlaylistVideos
 } = require("../controllers/courseController");
 
 
@@ -36,6 +37,10 @@ router.get("/ping", (req, res) => {
 // ==============================
 router.get("/", getAllCourses);
 router.get("/:slug", getCourseBySlug);
+
+
+// loged in user
+router.get("/:id/playlist", protect, getPlaylistVideos);
 
 
 // ==============================

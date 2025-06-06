@@ -9,6 +9,7 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const fs = require("fs");
 const path = require("path");
+const { sendWelcomeEmail } = require("../utils/email");
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -33,6 +34,16 @@ exports.registerUser = async (req, res) => {
       fullName, username, email, mobileNumber, password,
       sponsorCode, affiliateCode, address, state, dob,
     });
+
+    // 📧 Send welcome mail
+    try {
+      await sendWelcomeEmail({
+        to: newUser.email,
+        name: newUser.fullName
+      });
+    } catch (mailErr) {
+      console.error("📭 Failed to send welcome email:", mailErr.message);
+    }
 
     // ➕ Create lead if sponsor is valid
     if (sponsorCode) {

@@ -211,3 +211,47 @@ exports.updateRelatedBundles = async (req, res) => {
     res.status(500).json({ message: "Failed to update related bundles" });
   }
 };
+
+// ✅ Get YouTube playlist videos for a course
+exports.getPlaylistVideos = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.id);
+    if (!course || !course.youtubePlaylistId) {
+      return res.status(404).json({ message: "Playlist not found for this course" });
+    }
+
+    const apiKey = process.env.YT_API_KEY;
+    const playlistId = course.youtubePlaylistId;
+    let nextPageToken = '';
+    const videos = [];
+
+    do {
+      const response = await axios.get(
+        `https://www.googleapis.com/youtube/v3/playlistItems`, {
+          params: {
+            part: "snippet",
+            playlistId,
+            maxResults: 50,
+            pageToken: nextPageToken,
+            key: apiKey
+          }
+        });
+
+      response.data.items.forEach(item => {
+        const { title, thumbnails, resourceId } = item.snippet;
+        videos.push({
+          videoId: resourceId.videoId,
+          title,
+          thumbnail: thumbnails?.medium?.url || "",
+        });
+      });
+
+      nextPageToken = response.data.nextPageToken;
+    } while (nextPageToken);
+
+    res.json(videos);
+  } catch (err) {
+    console.error("❌ Error fetching playlist:", err.message);
+    res.status(500).json({ message: "Failed to fetch playlist videos" });
+  }
+};

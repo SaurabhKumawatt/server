@@ -110,7 +110,7 @@ exports.logoutUser = (req, res) => {
 // ✅ Get Profile
 exports.getLoggedInUserProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select("-password");
+    const user = await User.findById(req.user._id).select("-password").populate("enrolledCourses.course", "title price");
     let sponsor = null;
 
     if (user.sponsorCode) {

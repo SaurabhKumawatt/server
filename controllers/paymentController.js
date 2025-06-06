@@ -44,7 +44,7 @@ exports.initiatePayment = async (req, res) => {
   }
 };
 
-// ✅ Razorpay Webhook Handler
+// ✅ Razorpay Webhook Handler with lower-tier bundle auto-enroll
 exports.verifyPayment = async (req, res) => {
   try {
     const raw = req.body.toString("utf8");
@@ -85,25 +85,40 @@ exports.verifyPayment = async (req, res) => {
       return res.status(404).json({ message: "Payment record not found" });
     }
 
-    // Enroll User
-    await Enrollment.create({
+    // 🎯 Get main course and its related lower bundles
+    const mainCourse = await Course.findById(payment.course).lean();
+    const courseIdsToEnroll = [mainCourse._id.toString(), ...(mainCourse.relatedBundleIds || []).map(id => id.toString())];
+
+    // 🔄 Avoid duplicate enrollments
+    const alreadyEnrolled = await Enrollment.find({
       userId: payment.user,
-      courseId: payment.course,
-      forBundleCourseId: payment.course,
-      paymentId: payment._id,
-      status: "active",
-    });
+      courseId: { $in: courseIdsToEnroll }
+    }).select("courseId");
 
-    await User.findByIdAndUpdate(payment.user, {
-      $push: {
-        enrolledCourses: {
-          course: payment.course,
-          progress: 0,
+    const alreadyEnrolledIds = new Set(alreadyEnrolled.map(e => e.courseId.toString()));
+    const newEnrollments = courseIdsToEnroll.filter(id => !alreadyEnrolledIds.has(id));
+
+    // ✅ Enroll in main + lower bundles
+    for (const courseId of newEnrollments) {
+      await Enrollment.create({
+        userId: payment.user,
+        courseId,
+        paymentId: payment._id,
+        status: "active",
+      });
+
+      await User.findByIdAndUpdate(payment.user, {
+        $push: {
+          enrolledCourses: { course: courseId, progress: 0 },
         },
-      },
-    });
+      });
+      await Course.findByIdAndUpdate(courseId, {
+        $inc: { learnersEnrolled: 1 }
+      });
+    }
 
-    // Referral Commission
+
+    // 💸 Commission (only on main bundle)
     const user = await User.findById(payment.user);
     if (user?.sponsorCode) {
       const sponsor = await User.findOne({ affiliateCode: user.sponsorCode });
@@ -124,10 +139,9 @@ exports.verifyPayment = async (req, res) => {
         sponsor.referralEarnings += commissionAmount;
         await sponsor.save();
 
-        await User.updateOne(
-          { _id: sponsor._id, "industryEarnings.label": "Affiliate Marketing" },
-          { $inc: { "industryEarnings.$.currentTotal": commissionAmount } }
-        );
+        await User.findByIdAndUpdate(sponsor._id, {
+          $inc: { "industryEarnings.currentTotal": commissionAmount }
+        });
       }
 
       await Leads.findOneAndUpdate(
@@ -143,6 +157,7 @@ exports.verifyPayment = async (req, res) => {
     res.status(500).json({ message: "Webhook processing failed" });
   }
 };
+
 
 // ✅ Get logged-in user's payments
 exports.getUserPayments = async (req, res) => {

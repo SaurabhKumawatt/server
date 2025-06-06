@@ -19,6 +19,7 @@ const {
   addLessonToModule,
   updateLesson,
   deleteLesson,
+  updateRelatedBundles,
 } = require("../controllers/courseController");
 
 
@@ -119,6 +120,13 @@ router.put(
 
     res.json({ message: "Thumbnail2 updated", thumbnail2: course.thumbnail2 });
   }
+);
+
+router.patch(
+  "/:id/related-bundles",
+  protect,
+  authorizeRoles("admin"),
+  updateRelatedBundles
 );
 
 

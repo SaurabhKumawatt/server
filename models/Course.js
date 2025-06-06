@@ -22,9 +22,9 @@ const courseSchema = new mongoose.Schema(
     },
     points: [
       {
-    heading: { type: String, required: false },
-    description: { type: String, required: false }
-  }
+        heading: { type: String, required: false },
+        description: { type: String, required: false }
+      }
     ],
     category: {
       type: String,
@@ -35,6 +35,12 @@ const courseSchema = new mongoose.Schema(
       default: false,
     },
     relatedCourses: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Course",
+      },
+    ], 
+    relatedBundleIds: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Course",
@@ -130,13 +136,13 @@ const courseSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
-    createdAt: { 
-      type: Date, 
-      default: Date.now 
+    createdAt: {
+      type: Date,
+      default: Date.now
     },
-    updatedAt: { 
-      type: Date, 
-      default: Date.now 
+    updatedAt: {
+      type: Date,
+      default: Date.now
     },
   },
   { timestamps: true }

@@ -182,3 +182,32 @@ exports.deleteLesson = async (req, res) => {
     res.status(500).json({ message: "Failed to delete lesson" });
   }
 };
+
+// ✅ Admin: Update relatedBundleIds of a course
+exports.updateRelatedBundles = async (req, res) => {
+  try {
+    const { relatedBundleIds } = req.body;
+
+    if (!Array.isArray(relatedBundleIds)) {
+      return res.status(400).json({ message: "relatedBundleIds must be an array of ObjectIds" });
+    }
+
+    const course = await Course.findByIdAndUpdate(
+      req.params.id,
+      { relatedBundleIds },
+      { new: true }
+    );
+
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+
+    res.json({
+      message: "Related bundles updated successfully",
+      relatedBundleIds: course.relatedBundleIds,
+    });
+  } catch (err) {
+    console.error("❌ Error updating related bundles:", err);
+    res.status(500).json({ message: "Failed to update related bundles" });
+  }
+};

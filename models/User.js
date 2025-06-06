@@ -105,13 +105,10 @@ const userSchema = new mongoose.Schema(
         },
       },
     ],
-    industryEarnings: [
-      {
-        label: { type: String },           // e.g., "Affiliate Marketing", "EdTech"
-        initialAmount: { type: Number },   // amount entered by admin
-        currentTotal: { type: Number, default: 0 }, // keeps updating with commissions
-      }
-    ],
+    industryEarnings: {
+      initialAmount: { type: Number, default: 0 },
+      currentTotal: { type: Number, default: 0 },
+    },
   },
   { timestamps: true }
 );

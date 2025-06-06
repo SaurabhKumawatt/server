@@ -15,12 +15,13 @@ const paymentSchema = new mongoose.Schema(
     razorpayPaymentId: {
       type: String,
       unique: true,
-      required: false
+      required: false,
+      sparse: true
     },
     razorpayOrderId: {
       type: String,
       unique: true,
-      required: true
+      required: true,
     },
     amountPaid: { type: Number, required: true, min: 0 },
     currency: { type: String, default: 'INR' },
@@ -36,15 +37,15 @@ const paymentSchema = new mongoose.Schema(
     },
     razorpayRefundIds: [{ type: String }],
     gatewayDetails: {
-    type: Object,
-    default: {},
-    // Example sub-fields from Razorpay webhook/response (store only what's necessary)
-    // method_details: {
-    //   card: { last4: String, network: String, type: String },
-    //   upi: { vpa: String },
-    //   netbanking: { bank: String }
-    // }
-  },
+      type: Object,
+      default: {},
+      // Example sub-fields from Razorpay webhook/response (store only what's necessary)
+      // method_details: {
+      //   card: { last4: String, network: String, type: String },
+      //   upi: { vpa: String },
+      //   netbanking: { bank: String }
+      // }
+    },
     forBundleCourseId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Course',

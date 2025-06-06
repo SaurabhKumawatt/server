@@ -101,4 +101,26 @@ router.put(
   }
 );
 
+
+// ✅ Upload thumbnail2 image
+router.put(
+  "/:id/thumbnail2",
+  protect,
+  authorizeRoles("admin", "instructor"),
+  uploadTo("course-thumbnails").single("thumbnail2"),
+  async (req, res) => {
+    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+
+    const course = await Course.findByIdAndUpdate(
+      req.params.id,
+      { thumbnail2: `/uploads/course-thumbnails/${req.file.filename}` },
+      { new: true }
+    );
+
+    res.json({ message: "Thumbnail2 updated", thumbnail2: course.thumbnail2 });
+  }
+);
+
+
+
 module.exports = router;

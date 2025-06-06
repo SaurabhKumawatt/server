@@ -82,28 +82,22 @@ router.delete(
 // ==============================
 // 🖼 Thumbnail Upload
 // ==============================
+// ✅ Upload thumbnail1 image
 router.put(
-  "/:id/thumbnail",
+  "/:id/thumbnail1",
   protect,
   authorizeRoles("admin", "instructor"),
-  uploadTo("course-thumbnails").single("thumbnail"),
+  uploadTo("course-thumbnails").single("thumbnail1"),
   async (req, res) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({ message: "No file uploaded" });
-      }
+    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
-      const course = await Course.findByIdAndUpdate(
-        req.params.id,
-        { thumbnail: `/uploads/course-thumbnails/${req.file.filename}` },
-        { new: true }
-      );
+    const course = await Course.findByIdAndUpdate(
+      req.params.id,
+      { thumbnail1: `/uploads/course-thumbnails/${req.file.filename}` },
+      { new: true }
+    );
 
-      res.json({ message: "Thumbnail updated", thumbnail: course.thumbnail });
-    } catch (error) {
-      console.error("Thumbnail upload error:", error);
-      res.status(500).json({ message: "Failed to update thumbnail" });
-    }
+    res.json({ message: "Thumbnail1 updated", thumbnail1: course.thumbnail1 });
   }
 );
 

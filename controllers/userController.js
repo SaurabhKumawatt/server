@@ -296,10 +296,10 @@ exports.updateIndustryEarnings = async (req, res) => {
   }
 };
 
-// ✅ Get Sales Stats (Pie + Bar)
 exports.getSalesStats = async (req, res) => {
   try {
     const filterType = req.query.type || "daily";
+    const user = await User.findById(req.user._id);
     const commissions = await Commissions.find({ userId: req.user._id }).populate("bundleCourseId");
 
     const pieMap = {};
@@ -312,9 +312,9 @@ exports.getSalesStats = async (req, res) => {
       if (filterType === "daily") {
         label = created.toLocaleDateString("en-IN");
       } else if (filterType === "weekly") {
-        const startOfWeek = new Date(created);
-        startOfWeek.setDate(created.getDate() - created.getDay());
-        label = `Week of ${startOfWeek.toLocaleDateString("en-IN")}`;
+        const week = new Date(created);
+        week.setDate(created.getDate() - created.getDay());
+        label = `Week of ${week.toLocaleDateString("en-IN")}`;
       } else if (filterType === "monthly") {
         label = created.toLocaleString("default", { month: "short", year: "numeric" });
       }
@@ -324,13 +324,79 @@ exports.getSalesStats = async (req, res) => {
       barMap[label] = (barMap[label] || 0) + c.amount;
     });
 
-    const pieData = Object.entries(pieMap).map(([name, value]) => ({ name, value }));
-    const barData = Object.entries(barMap)
-      .map(([name, earnings]) => ({ name, earnings }))
-      .sort((a, b) => new Date(a.name.replace("Week of ", "")) - new Date(b.name.replace("Week of ", "")));
+    // Create last 7 date/week/month labels
+    let barData = [];
+    const today = new Date();
 
+    if (filterType === "daily") {
+      for (let i = 6; i >= 0; i--) {
+        const day = new Date(today);
+        day.setDate(today.getDate() - i);
+        const label = day.toLocaleDateString("en-IN");
+        barData.push({ name: label, earnings: barMap[label] || 0 });
+      }
+    }
+
+    if (filterType === "weekly") {
+      for (let i = 6; i >= 0; i--) {
+        const week = new Date(today);
+        week.setDate(today.getDate() - i * 7);
+        const label = `Week of ${week.toLocaleDateString("en-IN")}`;
+        barData.push({ name: label, earnings: barMap[label] || 0 });
+      }
+    }
+
+    if (filterType === "monthly") {
+      for (let i = 6; i >= 0; i--) {
+        const month = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const label = month.toLocaleString("default", { month: "short", year: "numeric" });
+        barData.push({ name: label, earnings: barMap[label] || 0 });
+      }
+    }
+
+    const pieData = Object.entries(pieMap).map(([name, value]) => ({ name, value }));
     res.json({ pieData, barData });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "Failed to generate sales stats" });
+  }
+};
+
+
+
+exports.getTopIncomeLeads = async (req, res) => {
+  try {
+    // 1. Find users referred by current user
+    const referredUsers = await User.find({ sponsorCode: req.user.affiliateCode });
+    const referredIds = referredUsers.map(u => u._id);
+
+    // 2. Aggregate commissions earned by each referred user
+    const earnings = await Commissions.aggregate([
+      { $match: { user: { $in: referredIds } } },
+      { $group: { _id: "$user", total: { $sum: "$amount" } } },
+      { $sort: { total: -1 } },
+      { $limit: 5 },
+      {
+        $lookup: {
+          from: "users",
+          localField: "_id",
+          foreignField: "_id",
+          as: "userInfo"
+        }
+      },
+      { $unwind: "$userInfo" },
+      {
+        $project: {
+          name: "$userInfo.fullName",
+          profileImage: "$userInfo.profileImage",
+          total: 1
+        }
+      }
+    ]);
+
+    res.status(200).json(earnings);
+  } catch (error) {
+    console.error("Top income leads error:", error);
+    res.status(500).json({ message: "Server error while fetching top income leads" });
   }
 };

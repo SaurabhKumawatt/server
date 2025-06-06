@@ -20,6 +20,7 @@ const {
   updateIndustryEarnings,
   getSalesStats,
   deleteLeadById,
+  getTopIncomeLeads,
 } = require("../controllers/userController");
 
 // 🔐 Middlewares
@@ -77,6 +78,7 @@ router.get("/commissions", protect, getAffiliateCommissions);
 router.get("/industry-earnings", protect, getIndustryEarnings);
 router.post("/request-payout", protect, requestPayout);
 router.get("/sales-stats", protect, getSalesStats);
+router.get("/top-income-leads", protect, getTopIncomeLeads);
 
 
 // ==============================

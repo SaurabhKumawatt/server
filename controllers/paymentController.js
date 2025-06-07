@@ -160,8 +160,40 @@ exports.verifyPayment = async (req, res) => {
       const sponsor = await User.findOne({ affiliateCode: user.sponsorCode });
       if (sponsor) {
         const course = await Course.findById(payment.course);
-        const rawPercent = parseFloat(course.affiliateCommissionPercent.toString());
-        const commissionAmount = Math.floor((rawPercent / 100) * payment.amountPaid);
+        const allBundles = await Course.find({ isBundle: true }).sort({ price: 1 });
+
+        const sponsorEnrollments = await Enrollment.find({
+          userId: sponsor._id,
+          courseId: { $in: allBundles.map(b => b._id) },
+        });
+
+        let referrerBundle = null;
+        for (let b of allBundles) {
+          if (sponsorEnrollments.find(e => e.courseId.toString() === b._id.toString())) {
+            referrerBundle = b;
+          }
+        }
+
+        let commissionAmount;
+
+        if (!referrerBundle) {
+          // sponsor has no bundle → use current course commission normally
+          const percent = parseFloat(course.affiliateCommissionPercent.toString());
+          commissionAmount = Math.floor((percent / 100) * payment.amountPaid);
+        } else {
+          const sponsorPrice = referrerBundle.price;
+          const sponsorPercent = parseFloat(referrerBundle.affiliateCommissionPercent.toString());
+          const coursePrice = course.price;
+          const coursePercent = parseFloat(course.affiliateCommissionPercent.toString());
+
+          if (coursePrice <= sponsorPrice) {
+            // selling same or lower bundle → use course % on course price
+            commissionAmount = Math.floor((coursePercent / 100) * payment.amountPaid);
+          } else {
+            // selling higher bundle → use sponsor’s own bundle % on their bundle price
+            commissionAmount = Math.floor((sponsorPercent / 100) * sponsorPrice);
+          }
+        }
 
         await Commission.create({
           userId: sponsor._id,
@@ -171,8 +203,8 @@ exports.verifyPayment = async (req, res) => {
           transactionId: payment._id,
         });
 
+        // 🔄 Update industry earnings
         const industryLabel = "Affiliate Marketing";
-
         const existingIndex = sponsor.industryEarnings.findIndex(
           (entry) => entry.label === industryLabel
         );
@@ -202,6 +234,8 @@ exports.verifyPayment = async (req, res) => {
         console.log("✅ Lead updated:", updatedLead.status);
       }
     }
+
+
 
     res.status(200).json({ message: "Payment verified and enrollment successful" });
   } catch (err) {

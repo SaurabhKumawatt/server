@@ -32,7 +32,7 @@ const userKycSchema = new mongoose.Schema(
         upiId: { 
             type: String, 
             default: null,
-            required: true 
+            required: false 
         },
         aadhaarNumber: { 
             type: String, 

@@ -15,7 +15,8 @@ exports.getAllCourses = async (req, res) => {
 exports.getCourseBySlug = async (req, res) => {
   try {
     const course = await Course.findOne({ slug: req.params.slug })
-      .populate("instructor", "fullName");
+      .populate("instructor", "fullName")
+      .populate("relatedCourses", "title thumbnail1");
     if (!course) return res.status(404).json({ message: "Course not found" });
     res.json(course);
   } catch (err) {

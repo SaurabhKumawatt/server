@@ -29,7 +29,18 @@ exports.registerUser = async (req, res) => {
       return res.status(400).json({ message: "Email or username already exists" });
     }
 
-    const affiliateCode = `SV${Date.now().toString().slice(-6)}`;
+    const lastUser = await User.findOne({ affiliateCode: { $regex: /^SV\d+$/ } })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    let nextCodeNumber = 1001;
+    if (lastUser && lastUser.affiliateCode) {
+      const numPart = parseInt(lastUser.affiliateCode.replace("SV", ""));
+      if (!isNaN(numPart)) {
+        nextCodeNumber = numPart + 1;
+      }
+    }
+    const affiliateCode = `SV${nextCodeNumber}`;
     const newUser = await User.create({
       fullName, username, email, mobileNumber, password,
       sponsorCode, affiliateCode, address, state, dob,

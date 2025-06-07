@@ -2,6 +2,7 @@ console.log("🛠️ Loading userRoutes");
 
 const express = require("express");
 const router = express.Router();
+const User = require("../models/User");
 
 // 🧠 Controllers
 const {
@@ -29,13 +30,30 @@ const { authorizeRoles } = require("../middleware/roles");
 const { uploadTo } = require("../middleware/multerMiddleware");
 
 
+
+
+
+
 // ==============================
 // 👤 Auth Routes
 // ==============================
 router.post("/register", registerUser);
 router.post("/login", loginUser);
 router.get("/logout", logoutUser);
+router.get("/validate-code/:code", async (req, res) => {
+  try {
+    const user = await User.findOne({
+      affiliateCode: new RegExp(`^${req.params.code}$`, "i") // case-insensitive match
+    });
 
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    res.json({ name: user.fullName });
+  } catch (err) {
+    console.error("Error validating referral code:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 
 // ==============================
 // 🔐 Authenticated User Routes

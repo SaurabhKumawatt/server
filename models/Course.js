@@ -113,8 +113,8 @@ const courseSchema = new mongoose.Schema(
       type: Number,
     },
     affiliateCommissionPercent: {
-      type: Number,
-      default: 20,
+      type: mongoose.Schema.Types.Decimal128,
+      default: 20.0,
     },
     tags: [String],
     instructor: {

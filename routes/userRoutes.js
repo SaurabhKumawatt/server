@@ -72,13 +72,13 @@ router.post(
 // ==============================
 // 💼 Affiliate Features
 // ==============================
-router.get("/leads", protect, getAffiliateLeads);
-router.delete("/leads/:id", protect, deleteLeadById);
-router.get("/commissions", protect, getAffiliateCommissions);
-router.get("/industry-earnings", protect, getIndustryEarnings);
-router.post("/request-payout", protect, requestPayout);
-router.get("/sales-stats", protect, getSalesStats);
-router.get("/top-income-leads", protect, getTopIncomeLeads);
+router.get("/leads", protect, authorizeRoles("paid-affiliate", "admin"), getAffiliateLeads);
+router.delete("/leads/:id", protect, authorizeRoles("paid-affiliate", "admin"), deleteLeadById);
+router.get("/commissions", protect, authorizeRoles("paid-affiliate", "admin"), getAffiliateCommissions);
+router.get("/industry-earnings", protect, authorizeRoles("paid-affiliate", "admin"), getIndustryEarnings);
+router.post("/request-payout", protect, authorizeRoles("paid-affiliate", "admin"), requestPayout);
+router.get("/sales-stats", protect, authorizeRoles("paid-affiliate", "admin"), getSalesStats);
+router.get("/top-income-leads", protect, authorizeRoles("paid-affiliate", "admin"), getTopIncomeLeads);
 
 
 // ==============================

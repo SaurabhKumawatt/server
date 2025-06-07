@@ -14,11 +14,32 @@ exports.getAllCourses = async (req, res) => {
 // ✅ Get course by slug (Public)
 exports.getCourseBySlug = async (req, res) => {
   try {
-    const course = await Course.findOne({ slug: req.params.slug }).populate("instructor");
+    const course = await Course.findOne({ slug: req.params.slug })
+      .populate("instructor", "fullName");
     if (!course) return res.status(404).json({ message: "Course not found" });
     res.json(course);
   } catch (err) {
-    console.error("Error fetching course by slug:", err);
+    res.status(500).json({ message: "Failed to fetch course" });
+  }
+};
+
+// Protected version (with sub-courses)
+exports.getProtectedCourseBySlug = async (req, res) => {
+  try {
+    const course = await Course.findOne({ slug: req.params.slug })
+      .populate("instructor", "fullName")
+      .populate("relatedCourses", "title slug thumbnail1 thumbnail2 price discountedPrice");
+
+    if (!course) return res.status(404).json({ message: "Course not found" });
+
+    // Optional: check if user is enrolled in bundle
+    const enrolled = await Enrollment.findOne({ user: req.user._id, course: course._id });
+    if (!enrolled) {
+      return res.status(403).json({ message: "Access denied: not enrolled in this bundle" });
+    }
+
+    res.json(course);
+  } catch (err) {
     res.status(500).json({ message: "Failed to fetch course" });
   }
 };
@@ -253,5 +274,40 @@ exports.getPlaylistVideos = async (req, res) => {
   } catch (err) {
     console.error("❌ Error fetching playlist:", err.message);
     res.status(500).json({ message: "Failed to fetch playlist videos" });
+  }
+};
+
+exports.enrollRelatedCoursesForUser = async (req, res) => {
+  try {
+    const { userId, courseId } = req.body;
+
+    const bundle = await Course.findById(courseId).populate("relatedCourses");
+    if (!bundle) return res.status(404).json({ message: "Bundle not found" });
+
+    const related = bundle.relatedCourses || [];
+
+    for (const sub of related) {
+      const already = await Enrollment.findOne({ userId, courseId: sub._id });
+      if (!already) {
+        await Enrollment.create({
+          userId,
+          courseId: sub._id,
+          status: "active",
+        });
+
+        await User.findByIdAndUpdate(userId, {
+          $push: { enrolledCourses: { course: sub._id, progress: 0 } },
+        });
+
+        await Course.findByIdAndUpdate(sub._id, {
+          $inc: { learnersEnrolled: 1 },
+        });
+      }
+    }
+
+    res.json({ message: "User enrolled in all related sub-courses" });
+  } catch (err) {
+    console.error("❌ Admin enroll update failed:", err);
+    res.status(500).json({ message: "Failed to enroll related courses" });
   }
 };

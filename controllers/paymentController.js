@@ -85,6 +85,10 @@ exports.verifyPayment = async (req, res) => {
       return res.status(404).json({ message: "Payment record not found" });
     }
 
+    await User.findByIdAndUpdate(payment.user, {
+      role: "paid-affiliate",
+    });
+
     // 🎯 Get main course and its related lower bundles
     const mainCourse = await Course.findById(payment.course).lean();
     const courseIdsToEnroll = [mainCourse._id.toString(), ...(mainCourse.relatedBundleIds || []).map(id => id.toString())];
@@ -115,7 +119,39 @@ exports.verifyPayment = async (req, res) => {
       await Course.findByIdAndUpdate(courseId, {
         $inc: { learnersEnrolled: 1 }
       });
+
     }
+    // ✅ Also enroll in all sub-courses (relatedCourses)
+    const bundleWithSubs = await Course.findById(payment.course).populate("relatedCourses");
+
+    if (bundleWithSubs.relatedCourses && bundleWithSubs.relatedCourses.length > 0) {
+      for (const subCourse of bundleWithSubs.relatedCourses) {
+        const subAlready = await Enrollment.findOne({
+          userId: payment.user,
+          courseId: subCourse._id
+        });
+
+        if (!subAlready) {
+          await Enrollment.create({
+            userId: payment.user,
+            courseId: subCourse._id,
+            paymentId: payment._id,
+            status: "active",
+          });
+
+          await User.findByIdAndUpdate(payment.user, {
+            $push: {
+              enrolledCourses: { course: subCourse._id, progress: 0 },
+            },
+          });
+
+          await Course.findByIdAndUpdate(subCourse._id, {
+            $inc: { learnersEnrolled: 1 },
+          });
+        }
+      }
+    }
+
 
 
     // 💸 Commission (only on main bundle)
@@ -124,9 +160,8 @@ exports.verifyPayment = async (req, res) => {
       const sponsor = await User.findOne({ affiliateCode: user.sponsorCode });
       if (sponsor) {
         const course = await Course.findById(payment.course);
-        const commissionAmount = Math.floor(
-          (course.affiliateCommissionPercent / 100) * payment.amountPaid
-        );
+        const rawPercent = parseFloat(course.affiliateCommissionPercent.toString());
+        const commissionAmount = Math.floor((rawPercent / 100) * payment.amountPaid);
 
         await Commission.create({
           userId: sponsor._id,
@@ -136,19 +171,36 @@ exports.verifyPayment = async (req, res) => {
           transactionId: payment._id,
         });
 
-        sponsor.referralEarnings += commissionAmount;
-        await sponsor.save();
+        const industryLabel = "Affiliate Marketing";
 
-        await User.findByIdAndUpdate(sponsor._id, {
-          $inc: { "industryEarnings.currentTotal": commissionAmount }
-        });
+        const existingIndex = sponsor.industryEarnings.findIndex(
+          (entry) => entry.label === industryLabel
+        );
+
+        if (existingIndex !== -1) {
+          sponsor.industryEarnings[existingIndex].currentTotal += commissionAmount;
+        } else {
+          sponsor.industryEarnings.push({
+            label: industryLabel,
+            initialAmount: commissionAmount,
+            currentTotal: commissionAmount
+          });
+        }
+
+        await sponsor.save();
       }
 
-      await Leads.findOneAndUpdate(
+      const updatedLead = await Leads.findOneAndUpdate(
         { leadUserId: user._id },
         { status: "converted", updatedAt: new Date() },
         { new: true }
       );
+
+      if (!updatedLead) {
+        console.log("❌ Lead not found for user:", user._id);
+      } else {
+        console.log("✅ Lead updated:", updatedLead.status);
+      }
     }
 
     res.status(200).json({ message: "Payment verified and enrollment successful" });

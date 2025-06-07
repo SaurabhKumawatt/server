@@ -20,7 +20,9 @@ const {
   updateLesson,
   deleteLesson,
   updateRelatedBundles,
-  getPlaylistVideos
+  getPlaylistVideos,
+  getProtectedCourseBySlug,
+  enrollRelatedCoursesForUser
 } = require("../controllers/courseController");
 
 
@@ -50,6 +52,9 @@ router.post("/", protect, authorizeRoles("admin", "instructor"), createCourse);
 router.put("/:id", protect, authorizeRoles("admin", "instructor"), updateCourse);
 router.delete("/:id", protect, authorizeRoles("admin"), deleteCourse);
 router.put("/:id/publish", protect, authorizeRoles("admin", "instructor"), publishCourse);
+router.get("/:slug", protect, getProtectedCourseBySlug);
+router.post("/enroll-related-courses", protect, authorizeRoles("admin", "instructor"), enrollRelatedCoursesForUser);
+
 
 
 // ==============================

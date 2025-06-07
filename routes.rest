@@ -55,3 +55,15 @@ Content-Type: image/jpeg
 
 < ./bundle-1.jpg
 ------CustomBoundary999--
+
+
+
+### Enroll user into related courses manually (admin)
+POST http://localhost:5000/api/admin/enroll-related-courses
+Content-Type: application/json
+Cookie: stravix-auth-token=your_admin_jwt_token_here
+
+{
+  "userId": "replace_with_user_id",
+  "courseId": "replace_with_main_bundle_course_id"
+}

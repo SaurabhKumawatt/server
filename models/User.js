@@ -39,8 +39,8 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["affiliate", "admin", "instructor"],
-      default: "affiliate",
+      enum: ["unpaid-affiliate", "paid-affiliate", "admin", "instructor"],
+      default: "unpaid-affiliate",
       required: true,
     },
     address: {
@@ -105,10 +105,13 @@ const userSchema = new mongoose.Schema(
         },
       },
     ],
-    industryEarnings: {
-      initialAmount: { type: Number, default: 0 },
-      currentTotal: { type: Number, default: 0 },
-    },
+    industryEarnings: [
+      {
+        label: { type: String, required: true },
+        initialAmount: { type: Number, default: 0 },
+        currentTotal: { type: Number, default: 0 },
+      }
+    ],
   },
   { timestamps: true }
 );

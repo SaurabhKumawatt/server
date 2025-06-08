@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const { check, validationResult } = require("express-validator");
 
 // 🎯 Controller Functions
 const {
@@ -25,7 +26,15 @@ router.post("/verify", verifyPayment);
 // ==============================
 // 🧾 Logged-in User Payments
 // ==============================
-router.post("/initiate", protect, initiatePayment);
+router.post(
+  "/initiate",
+  protect,
+  [
+    check("amount").isFloat({ gt: 0 }).withMessage("Amount must be greater than 0"),
+    check("courseId").notEmpty().withMessage("Course ID is required")
+  ],
+  initiatePayment
+);
 router.get("/my-payments", protect, getUserPayments);
 
 

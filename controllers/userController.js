@@ -10,6 +10,8 @@ const bcrypt = require("bcryptjs");
 const fs = require("fs");
 const path = require("path");
 const { sendWelcomeEmail } = require("../utils/email");
+const { validationResult } = require("express-validator");
+
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -18,6 +20,11 @@ const generateToken = (id) => {
 
 // ✅ Register User
 exports.registerUser = async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(422).json({ errors: errors.array() });
+  }
+
   try {
     const {
       fullName, username, email, mobileNumber,
@@ -72,10 +79,12 @@ exports.registerUser = async (req, res) => {
     }
 
     const token = generateToken(newUser._id);
+    const isProduction = process.env.NODE_ENV === "production";
+
     res.cookie("token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "development",
-      sameSite: "None",
+      secure: isProduction,                       // 🔁 false for localhost
+      sameSite: isProduction ? "None" : "Lax",    // 🔁 Lax for localhost
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -106,10 +115,12 @@ exports.loginUser = async (req, res) => {
     }
 
     const token = generateToken(user._id);
+    const isProduction = process.env.NODE_ENV === "production";
+
     res.cookie("token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "development",
-      sameSite: "None",
+      secure: isProduction,                       // 🔁 false for localhost
+      sameSite: isProduction ? "None" : "Lax",    // 🔁 Lax for localhost
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 

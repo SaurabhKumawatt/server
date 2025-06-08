@@ -3,6 +3,7 @@ console.log("🛠️ Loading userRoutes");
 const express = require("express");
 const router = express.Router();
 const User = require("../models/User");
+const { check, validationResult } = require("express-validator");
 
 // 🧠 Controllers
 const {
@@ -37,7 +38,18 @@ const { uploadTo } = require("../middleware/multerMiddleware");
 // ==============================
 // 👤 Auth Routes
 // ==============================
-router.post("/register", registerUser);
+router.post(
+  "/register",
+  [
+    check("fullName").notEmpty().withMessage("Full Name is required"),
+    check("username").notEmpty().withMessage("Username is required"),
+    check("email").isEmail().withMessage("Valid email is required"),
+    check("mobileNumber").isMobilePhone("en-IN").withMessage("Valid mobile number required"),
+    check("password").isLength({ min: 6 }).withMessage("Password must be at least 6 characters"),
+    check("address").notEmpty().withMessage("Address is required"),
+  ],
+  registerUser
+);
 router.post("/login", loginUser);
 router.get("/logout", logoutUser);
 router.get("/validate-code/:code", async (req, res) => {

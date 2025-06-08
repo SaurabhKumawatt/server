@@ -5,9 +5,14 @@ const Commission = require("../models/Commissions");
 const Course = require("../models/Course");
 const User = require("../models/User");
 const Leads = require("../models/Leads");
+const { validationResult } = require("express-validator");
 
 // ✅ Initiate Payment
 exports.initiatePayment = async (req, res) => {
+   const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(422).json({ errors: errors.array() });
+  }
   try {
     const Razorpay = require("razorpay");
     const razorpay = new Razorpay({

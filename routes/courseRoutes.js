@@ -5,6 +5,7 @@ const { uploadTo } = require("../middleware/multerMiddleware");
 const { protect } = require("../middleware/auth");
 const { authorizeRoles } = require("../middleware/roles");
 const Course = require("../models/Course");
+const { uploadThumbnailImage } = require("../middleware/cloudinaryUpload");
 
 const {
   getAllCourses,
@@ -98,13 +99,15 @@ router.put(
   "/:id/thumbnail1",
   protect,
   authorizeRoles("admin", "instructor"),
-  uploadTo("course-thumbnails").single("thumbnail1"),
+  uploadThumbnailImage.single("thumbnail1"),
   async (req, res) => {
-    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+    if (!req.file || !req.file.path) {
+      return res.status(400).json({ message: "Upload failed" });
+    }
 
     const course = await Course.findByIdAndUpdate(
       req.params.id,
-      { thumbnail1: `/uploads/course-thumbnails/${req.file.filename}` },
+      { thumbnail1: req.file.path },
       { new: true }
     );
 
@@ -112,19 +115,19 @@ router.put(
   }
 );
 
-
-// ✅ Upload thumbnail2 image
 router.put(
   "/:id/thumbnail2",
   protect,
   authorizeRoles("admin", "instructor"),
-  uploadTo("course-thumbnails").single("thumbnail2"),
+  uploadThumbnailImage.single("thumbnail2"),
   async (req, res) => {
-    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+    if (!req.file || !req.file.path) {
+      return res.status(400).json({ message: "Upload failed" });
+    }
 
     const course = await Course.findByIdAndUpdate(
       req.params.id,
-      { thumbnail2: `/uploads/course-thumbnails/${req.file.filename}` },
+      { thumbnail2: req.file.path },
       { new: true }
     );
 

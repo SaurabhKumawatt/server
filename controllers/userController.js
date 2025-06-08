@@ -57,8 +57,9 @@ exports.registerUser = async (req, res) => {
       }
     }
     const affiliateCode = `SV${nextCodeNumber}`;
+    let newUser;
     try { 
-    const newUser = await User.create({
+    newUser = await User.create({
       fullName, username, email, mobileNumber, password,
       sponsorCode, affiliateCode, address, state, dob,
     });

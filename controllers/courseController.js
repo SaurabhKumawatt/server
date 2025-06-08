@@ -1,4 +1,6 @@
 const Course = require("../models/Course");
+const axios = require("axios");
+
 
 // ✅ Get all published courses (Public)
 exports.getAllCourses = async (req, res) => {
@@ -312,3 +314,4 @@ exports.enrollRelatedCoursesForUser = async (req, res) => {
     res.status(500).json({ message: "Failed to enroll related courses" });
   }
 };
+

@@ -104,6 +104,7 @@ app.use("/api/courses", require("./routes/courseRoutes"));
 app.use("/api/payments", require("./routes/paymentRoutes"));
 app.use("/api/enrollments", require("./routes/enrollmentRoutes"));
 
+
 // === 404 Handler
 app.use((req, res, next) => {
   res.status(404).json({ message: "❌ Route not found" });

@@ -121,36 +121,103 @@ exports.verifyPayment = async (req, res) => {
       });
 
     }
+
+
+    // ✅ Also enroll in relatedCourses of lower bundles
+    for (const lowerBundleId of mainCourse.relatedBundleIds || []) {
+      const lowerBundle = await Course.findById(lowerBundleId).populate("relatedCourses");
+
+      if (!lowerBundle) {
+        console.log("❌ Lower bundle not found:", lowerBundleId);
+        continue;
+      }
+
+      if (!lowerBundle.relatedCourses || lowerBundle.relatedCourses.length === 0) {
+        console.log(`⚠️ No relatedCourses for lower bundle: ${lowerBundle.title || lowerBundle._id}`);
+        continue;
+      }
+
+      console.log(`📦 Lower bundle "${lowerBundle.title}" has sub-courses:`, lowerBundle.relatedCourses.map(c => c.title || c._id));
+
+      for (const subCourse of lowerBundle.relatedCourses) {
+        const subAlready = await Enrollment.findOne({
+          userId: payment.user,
+          courseId: subCourse._id,
+        });
+
+        if (subAlready) {
+          console.log(`🟡 Already enrolled in sub-course of lower bundle: ${subCourse.title || subCourse._id}`);
+          continue;
+        }
+
+        await Enrollment.create({
+          userId: payment.user,
+          courseId: subCourse._id,
+          paymentId: payment._id,
+          status: "active",
+        });
+
+        await User.findByIdAndUpdate(payment.user, {
+          $push: {
+            enrolledCourses: { course: subCourse._id, progress: 0 },
+          },
+        });
+
+        await Course.findByIdAndUpdate(subCourse._id, {
+          $inc: { learnersEnrolled: 1 },
+        });
+
+        console.log(`✅ Enrolled in sub-course of lower bundle: ${subCourse.title || subCourse._id}`);
+      }
+    }
+
+
+
     // ✅ Also enroll in all sub-courses (relatedCourses)
+    console.log("🔍 [RelatedCourses] Fetching sub-courses for course:", payment.course);
+
     const bundleWithSubs = await Course.findById(payment.course).populate("relatedCourses");
 
-    if (bundleWithSubs.relatedCourses && bundleWithSubs.relatedCourses.length > 0) {
+    if (!bundleWithSubs) {
+      console.log("❌ Bundle course not found with ID:", payment.course);
+    } else if (!bundleWithSubs.relatedCourses || bundleWithSubs.relatedCourses.length === 0) {
+      console.log("⚠️ No relatedCourses found in bundle:", bundleWithSubs.title || bundleWithSubs._id);
+    } else {
+      console.log("📦 Sub-courses to enroll:", bundleWithSubs.relatedCourses.map(c => c.title || c._id));
+
       for (const subCourse of bundleWithSubs.relatedCourses) {
         const subAlready = await Enrollment.findOne({
           userId: payment.user,
           courseId: subCourse._id
         });
 
-        if (!subAlready) {
-          await Enrollment.create({
-            userId: payment.user,
-            courseId: subCourse._id,
-            paymentId: payment._id,
-            status: "active",
-          });
-
-          await User.findByIdAndUpdate(payment.user, {
-            $push: {
-              enrolledCourses: { course: subCourse._id, progress: 0 },
-            },
-          });
-
-          await Course.findByIdAndUpdate(subCourse._id, {
-            $inc: { learnersEnrolled: 1 },
-          });
+        if (subAlready) {
+          console.log(`🟡 Already enrolled: ${subCourse.title || subCourse._id}`);
+          continue;
         }
+
+        await Enrollment.create({
+          userId: payment.user,
+          courseId: subCourse._id,
+          paymentId: payment._id,
+          status: "active",
+        });
+
+        await User.findByIdAndUpdate(payment.user, {
+          $push: {
+            enrolledCourses: { course: subCourse._id, progress: 0 },
+          },
+        });
+
+        await Course.findByIdAndUpdate(subCourse._id, {
+          $inc: { learnersEnrolled: 1 },
+        });
+
+        console.log(`✅ Enrolled in sub-course: ${subCourse.title || subCourse._id}`);
       }
     }
+
+
 
 
 

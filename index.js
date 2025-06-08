@@ -38,7 +38,9 @@ app.use(cookieParser());
 const allowedOrigins = [
   "https://www.upthrivex.com",
   "http://localhost:5173",
-  "https://stravix-testing-client.vercel.app"
+  "https://stravix-testing-client.vercel.app",
+  "https://www.stravix.in",
+  "https://stravix.in"
 ];
 
 app.use(

@@ -31,10 +31,19 @@ exports.registerUser = async (req, res) => {
       password, sponsorCode, address, state, dob,
     } = req.body;
 
-    const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+    const existingUser = await User.findOne({
+      $or: [
+        { email },
+        { username },
+        { mobileNumber }
+      ]
+    });
     if (existingUser) {
-      return res.status(400).json({ message: "Email or username already exists" });
+      return res.status(400).json({
+        message: "Email, mobile number or username already exists"
+      });
     }
+
 
     const lastUser = await User.findOne({ affiliateCode: { $regex: /^SV\d+$/ } })
       .sort({ createdAt: -1 })
@@ -48,10 +57,18 @@ exports.registerUser = async (req, res) => {
       }
     }
     const affiliateCode = `SV${nextCodeNumber}`;
+    try { 
     const newUser = await User.create({
       fullName, username, email, mobileNumber, password,
       sponsorCode, affiliateCode, address, state, dob,
     });
+    } catch (err) {
+      if (err.code === 11000) {
+        const field = Object.keys(err.keyValue)[0];
+        return res.status(409).json({ message: `${field} already exists` });
+      }
+      throw err;
+    }
 
     // 📧 Send welcome mail
     try {
@@ -160,14 +177,10 @@ exports.getLoggedInUserProfile = async (req, res) => {
 exports.updateUserProfile = async (req, res) => {
   try {
     const updates = req.body;
-    if (req.file) {
-      const user = await User.findById(req.user._id);
-      if (user.profileImage) {
-        const oldPath = path.join(__dirname, "..", "uploads", "profile", path.basename(user.profileImage));
-        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-      }
-      updates.profileImage = `/uploads/profile/${req.file.filename}`;
+    if (req.file && req.file.path) {
+      updates.profileImage = req.file.path; // Cloudinary returns full URL here
     }
+
 
     const updatedUser = await User.findByIdAndUpdate(req.user._id, updates, {
       new: true,

@@ -29,7 +29,7 @@ const {
 const { protect } = require("../middleware/auth");
 const { authorizeRoles } = require("../middleware/roles");
 const { uploadTo } = require("../middleware/multerMiddleware");
-
+const { uploadProfileImage } = require("../middleware/cloudinaryUpload");
 
 
 
@@ -75,7 +75,7 @@ router.get("/me", protect, getLoggedInUserProfile);
 router.put(
   "/update-profile",
   protect,
-  uploadTo("profile").single("image"),
+  uploadProfileImage.single("image"),
   updateUserProfile
 );
 

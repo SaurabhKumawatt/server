@@ -9,7 +9,7 @@ const { validationResult } = require("express-validator");
 
 // ✅ Initiate Payment
 exports.initiatePayment = async (req, res) => {
-   const errors = validationResult(req);
+  const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(422).json({ errors: errors.array() });
   }
@@ -115,12 +115,20 @@ exports.verifyPayment = async (req, res) => {
         paymentId: payment._id,
         status: "active",
       });
+      await User.updateOne(
+        { _id: payment.user, "enrolledCourses.course": { $ne: courseId } },
+        {
+          $push: {
+            enrolledCourses: { course: courseId, progress: 0 },
+          },
+        }
+      );
 
-      await User.findByIdAndUpdate(payment.user, {
-        $push: {
-          enrolledCourses: { course: courseId, progress: 0 },
-        },
-      });
+      // await User.findByIdAndUpdate(payment.user, {
+      //   $push: {
+      //     enrolledCourses: { course: courseId, progress: 0 },
+      //   },
+      // });
       await Course.findByIdAndUpdate(courseId, {
         $inc: { learnersEnrolled: 1 }
       });
@@ -162,11 +170,20 @@ exports.verifyPayment = async (req, res) => {
           status: "active",
         });
 
-        await User.findByIdAndUpdate(payment.user, {
-          $push: {
-            enrolledCourses: { course: subCourse._id, progress: 0 },
-          },
-        });
+        await User.updateOne(
+          { _id: payment.user, "enrolledCourses.course": { $ne: subCourse._id } },
+          {
+            $push: {
+              enrolledCourses: { course: subCourse._id, progress: 0 },
+            },
+          }
+        );
+
+        // await User.findByIdAndUpdate(payment.user, {
+        //   $push: {
+        //     enrolledCourses: { course: subCourse._id, progress: 0 },
+        //   },
+        // });
 
         await Course.findByIdAndUpdate(subCourse._id, {
           $inc: { learnersEnrolled: 1 },
@@ -207,12 +224,20 @@ exports.verifyPayment = async (req, res) => {
           paymentId: payment._id,
           status: "active",
         });
+        await User.updateOne(
+          { _id: payment.user, "enrolledCourses.course": { $ne: subCourse._id } },
+          {
+            $push: {
+              enrolledCourses: { course: subCourse._id, progress: 0 },
+            },
+          }
+        );
 
-        await User.findByIdAndUpdate(payment.user, {
-          $push: {
-            enrolledCourses: { course: subCourse._id, progress: 0 },
-          },
-        });
+        // await User.findByIdAndUpdate(payment.user, {
+        //   $push: {
+        //     enrolledCourses: { course: subCourse._id, progress: 0 },
+        //   },
+        // });
 
         await Course.findByIdAndUpdate(subCourse._id, {
           $inc: { learnersEnrolled: 1 },

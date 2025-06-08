@@ -54,4 +54,6 @@ const leadsSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
+leadsSchema.index({ referralId: 1, leadUserId: 1 }, { unique: true, sparse: true });
+
 module.exports = mongoose.model("Leads", leadsSchema);

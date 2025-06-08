@@ -10,7 +10,7 @@ const enrollmentsSchema = new mongoose.Schema(
         courseId: { 
             type: mongoose.Schema.Types.ObjectId, 
             ref: 'Course', 
-            required: true 
+            required: true
         },
         progress: { 
             type: Number, 
@@ -44,5 +44,7 @@ const enrollmentsSchema = new mongoose.Schema(
     },
     { timestamps: true }
 );
+
+enrollmentsSchema.index({ userId: 1, courseId: 1 }, { unique: true });
 
 module.exports = mongoose.model("Enrollments", enrollmentsSchema);

@@ -47,4 +47,6 @@ const commissionsSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
+commissionsSchema.index({ userId: 1, transactionId: 1 }, { unique: true });
+
 module.exports = mongoose.model("Commissions", commissionsSchema);

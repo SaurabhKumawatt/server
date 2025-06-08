@@ -82,7 +82,7 @@ app.post(
 app.use(express.json());
 
 // === Static Files
-app.use("/uploads/profile", express.static(path.join(__dirname, "uploads/profile")));
+// app.use("/uploads/profile", express.static(path.join(__dirname, "uploads/profile")));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use(
   "/uploads/course-thumbnails",
@@ -126,3 +126,4 @@ process.on("uncaughtException", (err) => {
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);
 });
+

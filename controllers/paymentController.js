@@ -6,6 +6,7 @@ const Course = require("../models/Course");
 const User = require("../models/User");
 const Leads = require("../models/Leads");
 const { validationResult } = require("express-validator");
+const { log } = require("console");
 
 // ✅ Initiate Payment
 exports.initiatePayment = async (req, res) => {
@@ -277,15 +278,18 @@ exports.verifyPayment = async (req, res) => {
           // sponsor has no bundle → use current course commission normally
           const percent = parseFloat(course.affiliateCommissionPercent.toString());
           commissionAmount = Math.floor((percent / 100) * payment.amountPaid);
+          
         } else {
-          const sponsorPrice = referrerBundle.price;
+          const sponsorPrice = referrerBundle.discountedPrice;
+          
           const sponsorPercent = parseFloat(referrerBundle.affiliateCommissionPercent.toString());
-          const coursePrice = course.price;
+          const coursePrice = course.discountedPrice;
           const coursePercent = parseFloat(course.affiliateCommissionPercent.toString());
 
           if (coursePrice <= sponsorPrice) {
             // selling same or lower bundle → use course % on course price
             commissionAmount = Math.floor((coursePercent / 100) * payment.amountPaid);
+            
           } else {
             // selling higher bundle → use sponsor’s own bundle % on their bundle price
             commissionAmount = Math.floor((sponsorPercent / 100) * sponsorPrice);

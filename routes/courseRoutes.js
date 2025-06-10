@@ -23,7 +23,9 @@ const {
   updateRelatedBundles,
   getPlaylistVideos,
   getProtectedCourseBySlug,
-  enrollRelatedCoursesForUser
+  enrollRelatedCoursesForUser,
+  removeRelatedCourse,
+  updateRelatedCourses
 } = require("../controllers/courseController");
 
 
@@ -141,6 +143,21 @@ router.patch(
   authorizeRoles("admin"),
   updateRelatedBundles
 );
+
+router.patch(
+  "/:id/related-courses",
+  protect,
+  authorizeRoles("admin", "instructor"),
+  updateRelatedCourses
+);
+
+router.delete(
+  "/:id/related-courses/:courseIdToRemove",
+  protect,
+  authorizeRoles("admin", "instructor"),
+  removeRelatedCourse
+);
+
 
 
 

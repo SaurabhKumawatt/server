@@ -315,3 +315,52 @@ exports.enrollRelatedCoursesForUser = async (req, res) => {
   }
 };
 
+// ✅ add and Remove one related course from a bundle
+exports.updateRelatedCourses = async (req, res) => {
+  try {
+    const { relatedCourses } = req.body;
+
+    if (!Array.isArray(relatedCourses)) {
+      return res.status(400).json({ message: "relatedCourses must be an array of ObjectIds" });
+    }
+
+    const course = await Course.findByIdAndUpdate(
+      req.params.id,
+      { relatedCourses },
+      { new: true }
+    );
+
+    if (!course) return res.status(404).json({ message: "Course not found" });
+
+    res.json({ message: "Related courses updated", relatedCourses: course.relatedCourses });
+  } catch (err) {
+    console.error("❌ Error updating related courses:", err);
+    res.status(500).json({ message: "Failed to update related courses" });
+  }
+};
+
+
+
+
+exports.removeRelatedCourse = async (req, res) => {
+  try {
+    const { id, courseIdToRemove } = req.params;
+
+    const course = await Course.findById(id);
+    if (!course) return res.status(404).json({ message: "Course not found" });
+
+    course.relatedCourses = course.relatedCourses.filter(
+      (cid) => cid.toString() !== courseIdToRemove
+    );
+
+    await course.save();
+
+    res.json({
+      message: "✅ Related course removed",
+      updatedRelatedCourses: course.relatedCourses,
+    });
+  } catch (err) {
+    console.error("❌ Error removing related course:", err);
+    res.status(500).json({ message: "Failed to remove related course" });
+  }
+};

@@ -23,6 +23,9 @@ const {
   getSalesStats,
   deleteLeadById,
   getTopIncomeLeads,
+  loginAdmin,
+  getUserPayouts,
+  getCommissionSummary
 } = require("../controllers/userController");
 
 // 🔐 Middlewares
@@ -109,11 +112,14 @@ router.get("/industry-earnings", protect, authorizeRoles("paid-affiliate", "admi
 router.post("/request-payout", protect, authorizeRoles("paid-affiliate", "admin"), requestPayout);
 router.get("/sales-stats", protect, authorizeRoles("paid-affiliate", "admin"), getSalesStats);
 router.get("/top-income-leads", protect, authorizeRoles("paid-affiliate", "admin"), getTopIncomeLeads);
+router.get("/payouts", protect, authorizeRoles("paid-affiliate", "admin"), getUserPayouts);
+router.get("/commission-summary", protect, authorizeRoles("paid-affiliate", "admin"), getCommissionSummary);
 
 
 // ==============================
 // 🔐 Admin Features
 // ==============================
+router.post("/admin-login", loginAdmin);
 router.patch(
   "/:userId/industry-earnings",
   protect,

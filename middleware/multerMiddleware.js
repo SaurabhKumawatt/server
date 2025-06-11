@@ -2,7 +2,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 
-// ✅ Create upload folder if it doesn't exist
+// 🔧 Create folder if not exists
 const getStorage = (folderName) => {
   const dir = path.join("uploads", folderName);
 
@@ -24,8 +24,8 @@ const getStorage = (folderName) => {
   });
 };
 
-// ✅ Only allow safe image file types
-const fileFilter = (req, file, cb) => {
+// ✅ Filter for image files
+const imageFileFilter = (req, file, cb) => {
   const allowedMimeTypes = [
     "image/jpeg",
     "image/jpg",
@@ -42,14 +42,43 @@ const fileFilter = (req, file, cb) => {
     return cb(null, true);
   }
 
-  cb(new Error("❌ Invalid file type. Only JPEG, PNG, JPG, or WEBP images allowed."));
+  cb(new Error("❌ Invalid image file type."));
 };
 
-// ✅ Export folder-specific multer instance
+// ✅ Filter for payout CSV/XLSX files
+const payoutFileFilter = (req, file, cb) => {
+  const allowedMimeTypes = [
+    "text/csv",
+    "application/vnd.ms-excel", // .csv
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" // .xlsx
+  ];
+  const allowedExt = [".csv", ".xlsx"];
+
+  const ext = path.extname(file.originalname).toLowerCase();
+  const isMimeOk = allowedMimeTypes.includes(file.mimetype);
+  const isExtOk = allowedExt.includes(ext);
+
+  if (isMimeOk && isExtOk) {
+    return cb(null, true);
+  }
+
+  cb(new Error("❌ Only CSV or XLSX payout files allowed."));
+};
+
+// 📦 Export for image upload
 exports.uploadTo = (folderName) => {
   return multer({
     storage: getStorage(folderName),
-    fileFilter,
+    fileFilter: imageFileFilter,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  });
+};
+
+// 📦 Export for payout file upload
+exports.uploadPayoutFile = () => {
+  return multer({
+    storage: getStorage("payouts"), // uploads/payouts/
+    fileFilter: payoutFileFilter,
     limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
   });
 };

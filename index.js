@@ -107,6 +107,12 @@ app.use("/api/courses", require("./routes/courseRoutes"));
 app.use("/api/payments", require("./routes/paymentRoutes"));
 app.use("/api/enrollments", require("./routes/enrollmentRoutes"));
 
+// admin 
+app.use("/api/admin", require("./routes/adminRoutes"));
+app.use("/downloads", express.static(path.join(__dirname, "downloads")));
+app.use('/downloads/payouts', express.static(path.join(__dirname, '..', 'downloads', 'payouts')));
+
+
 
 // === 404 Handler
 app.use((req, res, next) => {

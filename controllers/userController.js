@@ -231,6 +231,8 @@ exports.getKycStatus = async (req, res) => {
   }
 };
 
+
+
 // ✅ Submit KYC
 exports.submitKycDetails = async (req, res) => {
   try {
@@ -445,5 +447,81 @@ exports.getTopIncomeLeads = async (req, res) => {
   } catch (error) {
     console.error("Top income leads error:", error);
     res.status(500).json({ message: "Server error while fetching top income leads" });
+  }
+};
+
+
+
+
+// admin
+// userController.js ke loginUser method me thoda change:
+exports.loginAdmin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+    
+    if (!user || !(await user.matchPassword(password))) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    if (user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied: Not an admin" });
+    }
+
+    const token = generateToken(user._id);
+    const isProduction = process.env.NODE_ENV === "production";
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? "None" : "Lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    res.status(200).json({ message: "Admin login successful", user });
+  } catch (err) {
+    res.status(500).json({ message: "Something went wrong" });
+  }
+};
+
+
+
+// GET /api/user/payouts
+exports.getUserPayouts = async (req, res) => {
+  try {
+    const payouts = await Payout.find({ userId: req.user._id }).sort({ createdAt: -1 });
+    res.status(200).json(payouts);
+  } catch (error) {
+    console.error("❌ getUserPayouts error:", error);
+    res.status(500).json({ message: "Failed to fetch payouts" });
+  }
+};
+
+// GET /api/user/commission-summary
+exports.getCommissionSummary = async (req, res) => {
+  try {
+    const [paid, unpaid, processing] = await Promise.all([
+      Commissions.aggregate([
+        { $match: { userId: req.user._id, status: "paid" } },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]),
+      Commissions.aggregate([
+        { $match: { userId: req.user._id, status: "pending" } },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]),
+      Commissions.aggregate([
+        { $match: { userId: req.user._id, status: "approved" } },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]),
+    ]);
+
+    res.status(200).json({
+      paid: paid[0]?.total || 0,
+      unpaid: unpaid[0]?.total || 0,
+      processing: processing[0]?.total || 0,
+    });
+  } catch (error) {
+    console.error("❌ getCommissionSummary error:", error);
+    res.status(500).json({ message: "Failed to fetch commission summary" });
   }
 };

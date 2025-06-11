@@ -1,0 +1,2 @@
+Beneficiary Name,Beneficiary Account Number,IFSC,Transaction Type,Debit Account No,Transaction Date,Amount,Currency,Beneficiary Email ID,UTR Number,Status,Errors
+saurabh2,33152256591,SBIN0070633,NEFT,987654321,2025-06-11,7,INR,saurabh2@gmail.com,,Success,

@@ -500,13 +500,17 @@ exports.getUserPayouts = async (req, res) => {
 // GET /api/user/commission-summary
 exports.getCommissionSummary = async (req, res) => {
   try {
-    const [paid, unpaid, processing] = await Promise.all([
+    const [paid, unpaid, pending, processing] = await Promise.all([
       Commissions.aggregate([
         { $match: { userId: req.user._id, status: "paid" } },
         { $group: { _id: null, total: { $sum: "$amount" } } },
       ]),
       Commissions.aggregate([
-        { $match: { userId: req.user._id, status: "pending" } },
+        { $match: { userId: req.user._id,  status: "unpaid" } },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]),
+      Commissions.aggregate([
+        { $match: { userId: req.user._id,  status: "pending" } },
         { $group: { _id: null, total: { $sum: "$amount" } } },
       ]),
       Commissions.aggregate([
@@ -518,10 +522,69 @@ exports.getCommissionSummary = async (req, res) => {
     res.status(200).json({
       paid: paid[0]?.total || 0,
       unpaid: unpaid[0]?.total || 0,
+      pending: pending[0]?.total || 0,
       processing: processing[0]?.total || 0,
+      
     });
   } catch (error) {
     console.error("❌ getCommissionSummary error:", error);
     res.status(500).json({ message: "Failed to fetch commission summary" });
+  }
+};
+
+// GET /api/user/leaderboard?type=daily|weekly|monthly|all
+exports.getLeaderboard = async (req, res) => {
+  try {
+    const type = req.query.type || "all";
+
+    let dateFilter = {};
+    const now = new Date();
+
+    if (type === "daily") {
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      dateFilter.createdAt = { $gte: startOfDay };
+    } else if (type === "weekly") {
+      const sevenDaysAgo = new Date(now);
+      sevenDaysAgo.setDate(now.getDate() - 7);
+      dateFilter.createdAt = { $gte: sevenDaysAgo };
+    } else if (type === "monthly") {
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      dateFilter.createdAt = { $gte: startOfMonth };
+    }
+
+    const leaderboard = await Commissions.aggregate([
+      {
+        $match: type === "all" ? {} : dateFilter,
+      },
+      {
+        $group: {
+          _id: "$userId",
+          totalEarnings: { $sum: "$amount" },
+        },
+      },
+      { $sort: { totalEarnings: -1 } },
+      { $limit: 10 },
+      {
+        $lookup: {
+          from: "users",
+          localField: "_id",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: "$user" },
+      {
+        $project: {
+          fullName: "$user.fullName",
+          profileImage: "$user.profileImage",
+          totalEarnings: 1,
+        },
+      },
+    ]);
+
+    res.status(200).json(leaderboard);
+  } catch (err) {
+    console.error("❌ Leaderboard error:", err);
+    res.status(500).json({ message: "Failed to fetch leaderboard" });
   }
 };

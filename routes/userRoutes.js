@@ -25,7 +25,8 @@ const {
   getTopIncomeLeads,
   loginAdmin,
   getUserPayouts,
-  getCommissionSummary
+  getCommissionSummary,
+  getLeaderboard
 } = require("../controllers/userController");
 
 // 🔐 Middlewares
@@ -114,6 +115,7 @@ router.get("/sales-stats", protect, authorizeRoles("paid-affiliate", "admin"), g
 router.get("/top-income-leads", protect, authorizeRoles("paid-affiliate", "admin"), getTopIncomeLeads);
 router.get("/payouts", protect, authorizeRoles("paid-affiliate", "admin"), getUserPayouts);
 router.get("/commission-summary", protect, authorizeRoles("paid-affiliate", "admin"), getCommissionSummary);
+router.get("/leaderboard", protect, getLeaderboard);
 
 
 // ==============================

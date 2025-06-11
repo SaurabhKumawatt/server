@@ -119,7 +119,8 @@ router.get("/commission-summary", protect, authorizeRoles("paid-affiliate", "adm
 // ==============================
 // 🔐 Admin Features
 // ==============================
-router.post("/admin-login", loginAdmin);
+router.post("/admin-login", protect,
+  authorizeRoles("admin"), loginAdmin);
 router.patch(
   "/:userId/industry-earnings",
   protect,

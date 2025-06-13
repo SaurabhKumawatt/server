@@ -61,11 +61,11 @@ exports.registerUser = async (req, res) => {
     }
     const affiliateCode = `SV${nextCodeNumber}`;
     let newUser;
-    try { 
-    newUser = await User.create({
-      fullName, username, email, mobileNumber, password,
-      sponsorCode, affiliateCode, address, state, dob,
-    });
+    try {
+      newUser = await User.create({
+        fullName, username, email, mobileNumber, password,
+        sponsorCode, affiliateCode, address, state, dob,
+      });
     } catch (err) {
       if (err.code === 11000) {
         const field = Object.keys(err.keyValue)[0];
@@ -483,7 +483,7 @@ exports.loginAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await User.findOne({ email });
-    
+
     if (!user || !(await user.matchPassword(password))) {
       return res.status(401).json({ message: "Invalid email or password" });
     }
@@ -528,11 +528,11 @@ exports.getCommissionSummary = async (req, res) => {
         { $group: { _id: null, total: { $sum: "$amount" } } },
       ]),
       Commissions.aggregate([
-        { $match: { userId: req.user._id,  status: "unpaid" } },
+        { $match: { userId: req.user._id, status: "unpaid" } },
         { $group: { _id: null, total: { $sum: "$amount" } } },
       ]),
       Commissions.aggregate([
-        { $match: { userId: req.user._id,  status: "pending" } },
+        { $match: { userId: req.user._id, status: "pending" } },
         { $group: { _id: null, total: { $sum: "$amount" } } },
       ]),
       Commissions.aggregate([
@@ -546,7 +546,7 @@ exports.getCommissionSummary = async (req, res) => {
       unpaid: unpaid[0]?.total || 0,
       pending: pending[0]?.total || 0,
       processing: processing[0]?.total || 0,
-      
+
     });
   } catch (error) {
     console.error("❌ getCommissionSummary error:", error);
@@ -635,8 +635,8 @@ exports.forgotPassword = async (req, res) => {
     res.status(200).json({ message: "OTP sent to your email" });
   } catch (err) {
     console.error(" Error in forgotPassword:", err.message);
-    res.status(500).json({ message: "Server error" });
-  }
+    res.status(500).json({ message: "Server error" });
+  }
 };
 // OTP Verification 
 exports.verifyOtp = async (req, res) => {
@@ -660,8 +660,8 @@ exports.verifyOtp = async (req, res) => {
     res.status(200).json({ message: "OTP verified successfully" });
   } catch (err) {
     console.error(" Error in verifyOtp:", err.message);
-    res.status(500).json({ message: "Server error" });
-  }
+    res.status(500).json({ message: "Server error" });
+  }
 };
 
 // Reset Password
@@ -673,15 +673,15 @@ exports.resetPassword = async (req, res) => {
     if (!user)
       return res.status(404).json({ message: "User not found" });
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    user.password = hashedPassword;
+
+    user.password = newPassword;
     await user.save();
 
     res.status(200).json({ message: "Password reset successful" });
   } catch (err) {
     console.error("❌ Error in resetPassword:", err.message);
-    res.status(500).json({ message: "Server error" });
-  }
+    res.status(500).json({ message: "Server error" });
+  }
 };
 
 

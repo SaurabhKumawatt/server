@@ -104,6 +104,7 @@ app.get("/", (req, res) => {
 // === Route Imports
 app.use("/api/user", require("./routes/userRoutes"));
 app.use("/api/courses", require("./routes/courseRoutes"));
+app.use("/api/trainings", require("./routes/trainingRoutes"));
 app.use("/api/payments", require("./routes/paymentRoutes"));
 app.use("/api/enrollments", require("./routes/enrollmentRoutes"));
 

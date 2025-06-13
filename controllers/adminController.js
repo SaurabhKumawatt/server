@@ -10,6 +10,7 @@ const Commissions = require("../models/Commissions");
 const UserKyc = require("../models/UserKyc");
 const mongoose = require("mongoose");
 const Payout = require("../models/Payout");
+const Training = require("../models/Training");
 
 
 exports.getUsersForPayout = async (req, res) => {
@@ -492,3 +493,47 @@ exports.getCompletePayouts = async (req, res) => {
   }
 };
 
+
+exports.createTraining = async (req, res) => {
+  try {
+    const {
+      title,
+      slug,
+      type,
+      youtubePlaylistId,
+      youtubeVideoId,
+    } = req.body;
+
+    if (!title || !slug || !type) {
+      return res.status(400).json({ message: "Required fields missing" });
+    }
+
+    // ✅ Cloudinary thumbnail required
+    if (!req.file || !req.file.path) {
+      return res.status(400).json({ message: "Thumbnail image is required" });
+    }
+
+    if (type === "playlist" && !youtubePlaylistId) {
+      return res.status(400).json({ message: "Playlist ID is required" });
+    }
+
+    if (type === "single" && !youtubeVideoId) {
+      return res.status(400).json({ message: "Video ID is required" });
+    }
+
+    const training = await Training.create({
+      title,
+      slug,
+      thumbnail: req.file.path, // ✅ Cloudinary secure URL
+      type,
+      youtubePlaylistId: type === "playlist" ? youtubePlaylistId : null,
+      youtubeVideoId: type === "single" ? youtubeVideoId : null,
+      status: "published",
+    });
+
+    res.status(201).json({ message: "Training created", training });
+  } catch (err) {
+    console.error("❌ Admin training creation error:", err);
+    res.status(500).json({ message: "Failed to create training" });
+  }
+};

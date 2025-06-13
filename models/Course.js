@@ -1,18 +1,28 @@
 const mongoose = require("mongoose");
+const sanitizeHtml = require("sanitize-html");
+
+const sanitize = (value) =>
+  sanitizeHtml(value || "", {
+    allowedTags: [],
+    allowedAttributes: {},
+  });
 
 const courseSchema = new mongoose.Schema(
   {
     title: {
       type: String,
       required: true,
+      set: sanitize,
     },
     slug: {
       type: String,
       unique: true,
       lowercase: true,
+      set: sanitize,
     },
     description: {
       type: String,
+      set: sanitize,
     },
     thumbnail1: {
       type: String,
@@ -22,13 +32,20 @@ const courseSchema = new mongoose.Schema(
     },
     points: [
       {
-        heading: { type: String, required: false },
-        description: { type: String, required: false }
-      }
+        heading: {
+          type: String,
+          set: sanitize,
+        },
+        description: {
+          type: String,
+          set: sanitize,
+        },
+      },
     ],
     category: {
       type: String,
       required: true,
+      set: sanitize,
     },
     isBundle: {
       type: Boolean,
@@ -39,84 +56,99 @@ const courseSchema = new mongoose.Schema(
         type: mongoose.Schema.Types.ObjectId,
         ref: "Course",
       },
-    ], 
+    ],
     relatedBundleIds: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Course",
       },
     ],
-    modules: [{
-      _id: {
-        type: mongoose.Schema.Types.ObjectId,
-        auto: true
-      },
-      title: {
-        type: String,
-        required: true
-      },
-      description: {
-        type: String,
-        default: null
-      },
-      position: {
-        type: Number,
-        required: true,
-        min: 0
-      },
-
-      lessons: [{
+    modules: [
+      {
         _id: {
           type: mongoose.Schema.Types.ObjectId,
-          auto: true
+          auto: true,
         },
         title: {
           type: String,
-          required: true
-        },
-        videoUrl: {
-          type: String,
-          default: null
-        },
-        videoThumbnailUrl: {
-          type: String,
-          default: null
-        },
-        content: {
-          type: String,
-          default: null
-        },
-        duration: {
-          type: Number,
-          min: 0,
-          default: 0
+          required: true,
+          set: sanitize,
         },
         description: {
           type: String,
-          default: null
+          default: null,
+          set: sanitize,
         },
-        isFreePreview: {
-          type: Boolean,
-          default: false
+        position: {
+          type: Number,
+          required: true,
+          min: 0,
         },
-        createdAt: {
-          type: Date,
-          default: Date.now
-        }
-      }]
-    }],
+        lessons: [
+          {
+            _id: {
+              type: mongoose.Schema.Types.ObjectId,
+              auto: true,
+            },
+            title: {
+              type: String,
+              required: true,
+              set: sanitize,
+            },
+            videoUrl: {
+              type: String,
+              default: null,
+            },
+            videoThumbnailUrl: {
+              type: String,
+              default: null,
+            },
+            content: {
+              type: String,
+              default: null,
+              set: sanitize,
+            },
+            duration: {
+              type: Number,
+              min: 0,
+              default: 0,
+            },
+            description: {
+              type: String,
+              default: null,
+              set: sanitize,
+            },
+            isFreePreview: {
+              type: Boolean,
+              default: false,
+            },
+            createdAt: {
+              type: Date,
+              default: Date.now,
+            },
+          },
+        ],
+      },
+    ],
     price: {
       type: Number,
       required: true,
+      min: 0,
     },
     discountedPrice: {
       type: Number,
+      min: 0,
     },
     affiliateCommissionPercent: {
       type: mongoose.Schema.Types.Decimal128,
       default: 20.0,
     },
-    tags: [String],
+    tags: [
+      {
+        type: String,
+        set: sanitize,
+      },
+    ],
     instructor: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -124,25 +156,24 @@ const courseSchema = new mongoose.Schema(
     learnersEnrolled: {
       type: Number,
       default: 0,
+      min: 0,
     },
     status: {
       type: String,
       enum: ["draft", "published"],
       default: "draft",
     },
-
-    // 🔽 New Field for YouTube Playlist
     youtubePlaylistId: {
       type: String,
       default: null,
     },
     createdAt: {
       type: Date,
-      default: Date.now
+      default: Date.now,
     },
     updatedAt: {
       type: Date,
-      default: Date.now
+      default: Date.now,
     },
   },
   { timestamps: true }

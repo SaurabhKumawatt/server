@@ -10,6 +10,9 @@ const {
   registerUser,
   loginUser,
   logoutUser,
+  forgotPassword,
+  verifyOtp,
+  resetPassword,
   getLoggedInUserProfile,
   updateUserProfile,
   changePassword,
@@ -26,7 +29,8 @@ const {
   loginAdmin,
   getUserPayouts,
   getCommissionSummary,
-  getLeaderboard
+  getLeaderboard,
+  getAllPublishedTrainings
 } = require("../controllers/userController");
 
 // 🔐 Middlewares
@@ -56,6 +60,10 @@ router.post(
 );
 router.post("/login", loginUser);
 router.get("/logout", logoutUser);
+router.post("/forgot-password", forgotPassword);
+router.post("/verify-otp", verifyOtp);
+router.post("/reset-password", resetPassword);
+
 router.get("/validate-code/:code", async (req, res) => {
   try {
     const user = await User.findOne({
@@ -75,14 +83,12 @@ router.get("/validate-code/:code", async (req, res) => {
 // 🔐 Authenticated User Routes
 // ==============================
 router.get("/me", protect, getLoggedInUserProfile);
-
 router.put(
   "/update-profile",
   protect,
   uploadProfileImage.single("image"),
   updateUserProfile
 );
-
 router.put("/change-password", protect, changePassword);
 
 
@@ -90,7 +96,7 @@ router.put("/change-password", protect, changePassword);
 // 🧾 KYC
 // ==============================
 router.get("/kyc-status", protect, getKycStatus);
-
+router.get("/trainings", protect, getAllPublishedTrainings);
 router.post(
   "/submit-kyc",
   protect,

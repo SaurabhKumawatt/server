@@ -89,3 +89,27 @@ exports.sendCommissionEmail = async ({ to, name, referredUser, courseTitle, comm
     console.error("📭 Error sending commission email:", err.message);
   }
 };
+// Send OTP Email
+exports.sendOtpEmail = async ({ to, otp }) => {
+  try {
+    await transporter.sendMail({
+      from: `"StraviX OTP" <${process.env.EMAIL_FROM}>,`,
+      to,
+      subject: "Your OTP for Password Reset",
+      html: 
+       `<div style="font-family: Arial, sans-serif; padding: 20px;">
+          <h2 style="color: #182432;">Hello,</h2>
+          <p>You recently requested to reset your password. Use the OTP below to continue:</p>
+          <div style="font-size: 24px; font-weight: bold; margin: 20px 0; color: #2196f3;">
+            ${otp}
+          </div>
+          <p>This OTP is valid for the next 10 minutes.</p>
+          <p>If you didn’t request this, you can safely ignore this email.</p>
+          <br/>
+          <p style="color: #888;">– Team StraviX</p>
+        </div>`,
+    });
+  } catch (err) {
+    console.error(" Error sending OTP email:", err.message);
+  }
+};

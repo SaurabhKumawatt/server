@@ -20,5 +20,15 @@ const thumbnailStorage = new CloudinaryStorage({
   },
 });
 
+const trainingThumbnailStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "trainings",
+    allowed_formats: ["jpg", "jpeg", "png", "webp"],
+    transformation: [{ width: 800, height: 450, crop: "fill" }],
+  },
+});
+
+exports.uploadTrainingThumbnail = multer({ storage: trainingThumbnailStorage });
 exports.uploadProfileImage = multer({ storage: profileStorage });
 exports.uploadThumbnailImage = multer({ storage: thumbnailStorage });

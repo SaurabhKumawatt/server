@@ -8,6 +8,7 @@ const upload = multer({ dest: "uploads/" });
 const { protect } = require("../middleware/auth");
 const { authorizeRoles } = require("../middleware/roles"); 
 const { uploadPayoutFile } = require("../middleware/multerMiddleware");
+const { uploadTrainingThumbnail } = require("../middleware/cloudinaryUpload");
 
 const {
     getUsersForPayoutApproval,
@@ -18,7 +19,8 @@ const {
     getUsersForPayout,
     getProcessingPayouts,
     getCompletePayouts,
-    getPayoutCSVFiles
+    getPayoutCSVFiles,
+    createTraining
 } = require("../controllers/adminController");
 
 
@@ -38,6 +40,13 @@ router.post(
 router.get("/payouts/processing", protect, authorizeRoles("admin"), getProcessingPayouts);
 router.get("/payouts/complete", protect, authorizeRoles("admin"), getCompletePayouts);
 
+router.post(
+  "/trainings",
+  protect,
+  authorizeRoles("admin"),
+  uploadTrainingThumbnail.single("thumbnail"),
+  createTraining
+);
 
 
 module.exports = router;

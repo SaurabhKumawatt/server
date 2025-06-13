@@ -4,13 +4,16 @@ const Course = require("../models/Course");
 const UserKyc = require("../models/UserKyc");
 const Leads = require("../models/Leads");
 const Commissions = require("../models/Commissions");
+const Training = require("../models/Training");
 const Payout = require("../models/Payout");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const fs = require("fs");
 const path = require("path");
 const { sendWelcomeEmail } = require("../utils/email");
+const { sendOtpEmail } = require("../utils/email");
 const { validationResult } = require("express-validator");
+const { Types } = require("mongoose");
 
 
 // Generate JWT Token
@@ -198,16 +201,40 @@ exports.updateUserProfile = async (req, res) => {
 exports.changePassword = async (req, res) => {
   try {
     const { oldPassword, newPassword } = req.body;
+
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({ message: "Both old and new passwords are required." });
+    }
+
+    if (typeof newPassword !== "string" || newPassword.length < 6) {
+      return res.status(400).json({ message: "New password must be at least 6 characters." });
+    }
+
+    if (!Types.ObjectId.isValid(req.user._id)) {
+      return res.status(400).json({ message: "Invalid user ID." });
+    }
+
     const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
 
     if (!(await user.matchPassword(oldPassword))) {
       return res.status(401).json({ message: "Old password is incorrect" });
     }
 
+    if (oldPassword === newPassword) {
+      return res.status(400).json({ message: "Old and new password cannot be the same" });
+    }
+
     user.password = newPassword;
     await user.save();
+
+    console.log(`[SECURITY] Password changed for user: ${user.email} at ${new Date().toISOString()}`);
+
     res.json({ message: "Password updated successfully" });
   } catch (err) {
+    console.error("❌ Password change error:", err.message);
     res.status(400).json({ message: "Password change failed" });
   }
 };
@@ -450,9 +477,6 @@ exports.getTopIncomeLeads = async (req, res) => {
   }
 };
 
-
-
-
 // admin
 // userController.js ke loginUser method me thoda change:
 exports.loginAdmin = async (req, res) => {
@@ -483,8 +507,6 @@ exports.loginAdmin = async (req, res) => {
     res.status(500).json({ message: "Something went wrong" });
   }
 };
-
-
 
 // GET /api/user/payouts
 exports.getUserPayouts = async (req, res) => {
@@ -586,5 +608,92 @@ exports.getLeaderboard = async (req, res) => {
   } catch (err) {
     console.error("❌ Leaderboard error:", err);
     res.status(500).json({ message: "Failed to fetch leaderboard" });
+  }
+};
+
+//Forgot Password 
+exports.forgotPassword = async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user)
+      return res.status(404).json({ message: "User not found with this email" });
+
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    user.otp = {
+      code: otpCode,
+      expiresAt: otpExpiry,
+    };
+
+    await user.save();
+
+    await sendOtpEmail({ to: email, otp: otpCode });
+
+    res.status(200).json({ message: "OTP sent to your email" });
+  } catch (err) {
+    console.error(" Error in forgotPassword:", err.message);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+// OTP Verification 
+exports.verifyOtp = async (req, res) => {
+  const { email, otp } = req.body;
+
+  try {
+    const user = await User.findOne({ email });
+
+    if (!user || !user.otp || user.otp.code !== otp) {
+      return res.status(400).json({ message: "Invalid or expired OTP" });
+    }
+
+    if (user.otp.expiresAt < new Date()) {
+      return res.status(400).json({ message: "OTP expired" });
+    }
+
+    // Mark OTP as used or clear it
+    user.otp = undefined;
+    await user.save();
+
+    res.status(200).json({ message: "OTP verified successfully" });
+  } catch (err) {
+    console.error(" Error in verifyOtp:", err.message);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Reset Password
+exports.resetPassword = async (req, res) => {
+  const { email, newPassword } = req.body;
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user)
+      return res.status(404).json({ message: "User not found" });
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    await user.save();
+
+    res.status(200).json({ message: "Password reset successful" });
+  } catch (err) {
+    console.error("❌ Error in resetPassword:", err.message);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+
+exports.getAllPublishedTrainings = async (req, res) => {
+  try {
+    const trainings = await Training.find({ status: "published" })
+      .select("title slug thumbnail type")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json(trainings);
+  } catch (err) {
+    console.error("❌ Error fetching trainings:", err);
+    res.status(500).json({ message: "Failed to fetch trainings" });
   }
 };

@@ -153,6 +153,7 @@ exports.loginUser = async (req, res) => {
 
 // ✅ Logout
 exports.logoutUser = (req, res) => {
+  
   res.clearCookie("token", {
     httpOnly: true,
     sameSite: "None",

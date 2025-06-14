@@ -63,3 +63,26 @@ exports.getTrainingBySlug = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+exports.updateTrainingThumbnail = async (req, res) => {
+  try {
+    if (!req.file || !req.file.path) {
+      return res.status(400).json({ message: "Thumbnail upload failed" });
+    }
+
+    const training = await Training.findByIdAndUpdate(
+      req.params.id,
+      { thumbnail: req.file.path },
+      { new: true }
+    );
+
+    if (!training) {
+      return res.status(404).json({ message: "Training not found" });
+    }
+
+    res.json({ message: "Thumbnail updated successfully", thumbnail: training.thumbnail });
+  } catch (err) {
+    console.error("Thumbnail update error:", err);
+    res.status(500).json({ message: "Failed to update thumbnail" });
+  }
+};

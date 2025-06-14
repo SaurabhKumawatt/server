@@ -20,8 +20,21 @@ const {
     getProcessingPayouts,
     getCompletePayouts,
     getPayoutCSVFiles,
-    createTraining
+    createTraining,
+     getAllUserSummaries, 
+     loginAsUser,
+     getPendingKycs,
+     updateKycStatus
 } = require("../controllers/adminController");
+
+// 🔐 Get complete user info (admin only)
+router.get("/users/summary", protect, authorizeRoles("admin"), getAllUserSummaries);
+
+// 🔐 Login as user (admin impersonation)
+router.post("/login-as-user/:userId", protect, authorizeRoles("admin"), loginAsUser);
+
+router.get("/kyc/pending", protect, authorizeRoles("admin"), getPendingKycs);
+router.put("/kyc/:userId/update", protect, authorizeRoles("admin"), updateKycStatus);
 
 
 router.get("/payouts", protect, authorizeRoles("admin"), getUsersForPayout);

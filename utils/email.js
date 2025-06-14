@@ -19,7 +19,7 @@ exports.sendWelcomeEmail = async ({ to, name }) => {
       to,
       subject: "Welcome to StraviX – Let’s Begin Your Growth Journey!",
       html: `
-       <div style="max-width: 600px; margin: auto; font-family: Arial, sans-serif; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+       <div style="width: 100%; margin: auto; font-family: Arial, sans-serif; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
         <!-- Header -->
         <div style="background-color: #182432; padding: 20px; text-align: center; color: #fff;">
           <img src="https://www.upthrivex.com/assets/logos/stravix 300 by 100.png" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
@@ -62,54 +62,193 @@ exports.sendWelcomeEmail = async ({ to, name }) => {
       `,
     });
   } catch (err) {
-    console.error("📭 Error sending welcome email:", err.message);
+    console.error("Error sending welcome email:", err.message);
   }
 };
 
 
 // ✅ Send Commission Earned Email
-exports.sendCommissionEmail = async ({ to, name, referredUser, courseTitle, commission }) => {
+exports.sendCommissionEmail = async ({ to, name, referredUser, courseTitle }) => {
   try {
     await transporter.sendMail({
-      from: `"Stravix LMS" <${process.env.EMAIL_FROM}>`,
+      from: `"StraviX" <${process.env.EMAIL_FROM}>`,
       to,
-      subject: "💰 You just earned a commission!",
+      subject: "Referral Commission Update!",
       html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px;">
-          <h2 style="color: #2196f3;">Hey ${name},</h2>
-          <p>🎉 Great news! You just earned a commission of <strong>₹${commission}</strong> 🎉</p>
-          <p>Your referral <strong>${referredUser}</strong> enrolled in <strong>${courseTitle}</strong>.</p>
-          <p>Keep sharing your referral link and grow your income 🚀</p>
-          <br/>
-          <p style="color: #888;">– Team Stravix</p>
+      <div style="width: 100%; margin: auto; font-family: Arial, sans-serif; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+        <!-- Header -->
+        <div style="background-color: #182432; padding: 20px; text-align: center; color: #fff;">
+          <img src="https://www.upthrivex.com/assets/logos/stravix 300 by 100.png" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
+          <h2 style="margin: 0; font-size: 12px;">Where Skills Meet Success</h2>
+          <h2 style="margin: 0; font-size: 22px;">Referral Update</h2>
         </div>
+
+        <!-- Body -->
+        <div style="padding: 30px; background-color: #ffffff; color: #333;">
+          <p>Dear <strong>${name}</strong>,</p>
+          <p>We've got an update for you! Your dashboard has been updated to reflect the new referral.</p>
+
+          <p>Here's a quick recap:</p>
+          <ul>
+            <li><strong>User Name:</strong> ${referredUser}</li>
+            <li><strong>Package:</strong> ${courseTitle}</li>
+          </ul>
+
+          <p><em>Note: You'll receive your commission for this referral in our upcoming payout cycle.</em></p>
+
+          <p>Keep referring and earning!</p>
+
+          <p>Best regards,<br/>Team <strong>StraviX</strong><br/><em>#WhereSkillsMeetSuccess</em></p>
+        </div>
+
+        <!-- Footer -->
+        <div style="background-color: #182432; text-align: center; padding: 10px; font-size: 12px; color: #999;">
+          © ${new Date().getFullYear()} StraviX. All rights reserved.
+        </div>
+      </div>
       `,
     });
   } catch (err) {
-    console.error("📭 Error sending commission email:", err.message);
+    console.error("Error sending commission email:", err.message);
   }
 };
+
 // Send OTP Email
-exports.sendOtpEmail = async ({ to, otp }) => {
+exports.sendOtpEmail = async ({ name, to, otp }) => {
   try {
     await transporter.sendMail({
-      from: `"StraviX OTP" <${process.env.EMAIL_FROM}>,`,
+      from: `"StraviX" <${process.env.EMAIL_FROM}>,`,
       to,
-      subject: "Your OTP for Password Reset",
-      html: 
-       `<div style="font-family: Arial, sans-serif; padding: 20px;">
-          <h2 style="color: #182432;">Hello,</h2>
-          <p>You recently requested to reset your password. Use the OTP below to continue:</p>
-          <div style="font-size: 24px; font-weight: bold; margin: 20px 0; color: #2196f3;">
-            ${otp}
-          </div>
-          <p>This OTP is valid for the next 10 minutes.</p>
-          <p>If you didn’t request this, you can safely ignore this email.</p>
-          <br/>
-          <p style="color: #888;">– Team StraviX</p>
-        </div>`,
+      subject: "Reset Your Password - OTP Inside",
+      html:
+        `
+       <div style="width: 100%; margin: auto; font-family: Arial, sans-serif; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+  <!-- Header -->
+  <div style="background-color: #182432; padding: 20px; text-align: center; color: #fff;">
+    <img src="https://www.upthrivex.com/assets/logos/stravix 300 by 100.png" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
+    <h2 style="margin: 0; font-size: 12px;">Where Skills Meet Success</h2>
+    <h2 style="margin: 0; font-size: 22px;">Password Reset Request</h2>
+  </div>
+
+  <!-- Body -->
+  <div style="padding: 30px; background-color: #ffffff; color: #333;">
+    <p>Dear <strong>${name}</strong>,</p>
+
+    <p>
+      We received a request to reset your password. To proceed, please use the One-Time Password (OTP) below:
+    </p>
+
+    <p style="font-size: 24px; font-weight: bold; text-align: center; letter-spacing: 4px; margin: 30px 0;">
+      OTP: <span style="color: #182432;">${otp}</span>
+    </p>
+
+    <p style="text-align: center; font-size: 14px; color: #555; margin-bottom: 30px;">
+      Validity: This OTP is valid for <strong>10 minutes</strong> and can be used only once.
+    </p>
+
+    <p>
+      If you didn't request a password reset, please contact our support team at
+      <a href="mailto:customerfirst@stravix.in" style="color: #1f3bb3;">customerfirst@stravix.in</a> to secure your account.
+    </p>
+
+    <p>Best regards,<br/>Team <strong>StraviX</strong><br/><em>#WhereSkillsMeetSuccess</em></p>
+  </div>
+
+  <!-- Footer -->
+  <div style="background-color: #182432; text-align: center; padding: 10px; font-size: 12px; color: #999;">
+    © ${new Date().getFullYear()} StraviX. All rights reserved.
+  </div>
+</div>
+
+       `,
     });
   } catch (err) {
     console.error(" Error sending OTP email:", err.message);
-  }
+  }
+};
+
+
+exports.sendPayoutSuccessEmail = async ({ to, name, totalAmount, tdsAmount, netAmount }) => {
+  try {
+    await transporter.sendMail({
+      from: `"StraviX Team" <${process.env.EMAIL_FROM}>`,
+      to,
+      subject: "🎉 Congratulations! Your weekly Payouts are In!",
+      html: `
+      <div style="width: 100%; margin: auto; font-family: Arial, sans-serif; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+        <!-- Header -->
+        <div style="background-color: #182432; padding: 20px; text-align: center; color: #fff;">
+          <img src="https://www.upthrivex.com/assets/logos/stravix 300 by 100.png" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
+          <h2 style="margin: 0; font-size: 12px;">Where Skills Meet Success</h2>
+          <h2 style="margin: 0; font-size: 22px;">Payout Details</h2>
+        </div>
+
+        <!-- Body -->
+        <div style="padding: 30px; background-color: #ffffff; color: #333;">
+          <p>Dear <strong>${name}</strong>,</p>
+          <p>We are pleased to inform you that you have received a payment of <strong>₹${totalAmount.toFixed(2)}</strong> from StraviX.</p>
+          <p>Below are the payout details:</p>
+          <ul>
+            <li><strong>Total Amount:</strong> ₹${totalAmount.toFixed(2)}</li>
+            <li><strong>2% TDS:</strong> ₹${tdsAmount.toFixed(2)}</li>
+            <li><strong>Net Paid:</strong> ₹${netAmount.toFixed(2)}</li>
+          </ul>
+          <p>For any assistance or queries, please feel free to reach out to us at
+          <a href="mailto:CustomerFirst@stravix.in" style="color:#1f3bb3;">CustomerFirst@stravix.in</a>.
+          </p>
+          <p>Best regards,<br/>Team <strong>StraviX</strong><br/><em>#WhereSkillsMeetSuccess</em></p>
+        </div>
+
+        <!-- Footer -->
+        <div style="background-color: #182432; text-align: center; padding: 10px; font-size: 12px; color: #999;">
+          © ${new Date().getFullYear()} StraviX. All rights reserved.
+        </div>
+      </div>
+      `,
+    });
+  } catch (err) {
+    console.error("Error sending payout success email:", err.message);
+  }
+};
+
+// Payout Failure Email
+exports.sendPayoutFailureEmail = async ({ to, name, reason, netAmount }) => {
+  try {
+    await transporter.sendMail({
+      from: `"StraviX" <${process.env.EMAIL_FROM}>`,
+      to,
+      subject: "Payout Failed Notification",
+      html: `
+      <div style="width: 100%; margin: auto; font-family: Arial, sans-serif; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+        <!-- Header -->
+        <div style="background-color: #182432; padding: 20px; text-align: center; color: #fff;">
+          <img src="https://www.upthrivex.com/assets/logos/stravix 300 by 100.png" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
+          <h2 style="margin: 0; font-size: 12px;">Where Skills Meet Success</h2>
+          <h2 style="margin: 0; font-size: 22px;">Payout Issue</h2>
+        </div>
+
+        <!-- Body -->
+        <div style="padding: 30px; background-color: #ffffff; color: #333;">
+          <p>Dear <strong>${name}</strong>,</p>
+          <p>We're sorry to inform you that your payout has been <strong>failed</strong>.</p>
+          <p>Here are the details:</p>
+          <ul>
+            <li><strong>Amount Processed:</strong> ₹${netAmount.toFixed(2)}</li>
+            <li><strong>Reason for Failure:</strong> ${reason || "Unknown"}</li>
+          </ul>
+          <p>For any assistance or queries, please feel free to reach out to us at 
+          <a href="mailto:CustomerFirst@stravix.in" style="color:#1f3bb3;">CustomerFirst@stravix.in</a></p>
+          <p>Best regards,<br/>Team <strong>StraviX</strong><br/><em>#WhereSkillsMeetSuccess</em></p>
+        </div>
+
+        <!-- Footer -->
+        <div style="background-color: #182432; text-align: center; padding: 10px; font-size: 12px; color: #999;">
+          © ${new Date().getFullYear()} StraviX. All rights reserved.
+        </div>
+      </div>
+      `,
+    });
+  } catch (err) {
+    console.error("Error sending payout failure email:", err.message);
+  }
 };

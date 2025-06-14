@@ -11,6 +11,8 @@ const UserKyc = require("../models/UserKyc");
 const mongoose = require("mongoose");
 const Payout = require("../models/Payout");
 const Training = require("../models/Training");
+const jwt = require("jsonwebtoken");
+const { sendPayoutSuccessEmail, sendPayoutFailureEmail } = require("../utils/email");
 
 
 exports.getUsersForPayout = async (req, res) => {
@@ -95,87 +97,86 @@ exports.getUsersForPayout = async (req, res) => {
 
 
 exports.getUsersForPayoutApproval = async (req, res) => {
-    try {
-        const { weekStart, weekEnd, kycStatus = "approved" } = req.query;
+  try {
+    const { weekStart, weekEnd, kycStatus = "approved" } = req.query;
 
-        if (!weekStart || !weekEnd) {
-            return res.status(400).json({ message: "weekStart and weekEnd required" });
-        }
-
-        const start = new Date(weekStart);
-        const end = new Date(weekEnd);
-        end.setHours(23, 59, 59, 999);
-
-        // 1️⃣ Get users whose commissions are pending for this period
-        const commissions = await Commissions.aggregate([
-            {
-                $match: {
-                    status: "pending",
-                    createdAt: { $gte: start, $lte: end }
-                }
-            },
-            {
-                $group: {
-                    _id: "$userId",
-                    totalPendingAmount: { $sum: "$amount" }
-                }
-            }
-        ]);
-
-        const userIds = commissions.map(c => c._id);
-
-        // 2️⃣ Fetch user + KYC + unpaid from earlier weeks
-        const users = await User.find({ _id: { $in: userIds } })
-            .select("_id fullName email mobile")
-            .lean();
-
-        const kycs = await UserKyc.find({ user: { $in: userIds } }).lean();
-
-        const unpaidMap = await Commissions.aggregate([
-            {
-                $match: {
-                    userId: { $in: userIds },
-                    status: "unpaid",
-                    createdAt: { $lt: start }
-                }
-            },
-            {
-                $group: {
-                    _id: "$userId",
-                    unpaidAmount: { $sum: "$amount" }
-                }
-            }
-        ]);
-
-        const unpaidObj = {};
-        unpaidMap.forEach(u => {
-            unpaidObj[u._id.toString()] = u.unpaidAmount;
-        });
-
-        const finalData = users.map(user => {
-            const kyc = kycs.find(k => k.user.toString() === user._id.toString());
-            const pending = commissions.find(c => c._id.toString() === user._id.toString());
-
-            return {
-                _id: user._id,
-                fullName: user.fullName,
-                email: user.email,
-                mobile: user.mobile,
-                kycStatus: kyc?.status || "pending",
-                totalPendingAmount: pending?.totalPendingAmount || 0,
-                unpaidFromLastWeek: unpaidObj[user._id.toString()] || 0
-            };
-        });
-
-        const filtered = finalData.filter(u => u.kycStatus === kycStatus);
-
-        res.status(200).json(filtered);
-    } catch (err) {
-        console.error("🔴 Error in getUsersForPayoutApproval:", err);
-        res.status(500).json({ message: "Server error" });
+    if (!weekStart || !weekEnd) {
+      return res.status(400).json({ message: "weekStart and weekEnd required" });
     }
-};
 
+    const start = new Date(weekStart);
+    const end = new Date(weekEnd);
+    end.setHours(23, 59, 59, 999);
+
+    // 1️⃣ Get users whose commissions are pending for this period
+    const commissions = await Commissions.aggregate([
+      {
+        $match: {
+          status: "pending",
+          createdAt: { $gte: start, $lte: end }
+        }
+      },
+      {
+        $group: {
+          _id: "$userId",
+          totalPendingAmount: { $sum: "$amount" }
+        }
+      }
+    ]);
+
+    const userIds = commissions.map(c => c._id);
+
+    // 2️⃣ Fetch user + KYC + unpaid from earlier weeks
+    const users = await User.find({ _id: { $in: userIds } })
+      .select("_id fullName email mobile")
+      .lean();
+
+    const kycs = await UserKyc.find({ user: { $in: userIds } }).lean();
+
+    const unpaidMap = await Commissions.aggregate([
+      {
+        $match: {
+          userId: { $in: userIds },
+          status: "unpaid",
+          createdAt: { $lt: start }
+        }
+      },
+      {
+        $group: {
+          _id: "$userId",
+          unpaidAmount: { $sum: "$amount" }
+        }
+      }
+    ]);
+
+    const unpaidObj = {};
+    unpaidMap.forEach(u => {
+      unpaidObj[u._id.toString()] = u.unpaidAmount;
+    });
+
+    const finalData = users.map(user => {
+      const kyc = kycs.find(k => k.user.toString() === user._id.toString());
+      const pending = commissions.find(c => c._id.toString() === user._id.toString());
+
+      return {
+        _id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        mobile: user.mobile,
+        kycStatus: kyc?.status || "pending",
+        totalPendingAmount: pending?.totalPendingAmount || 0,
+        unpaidFromLastWeek: unpaidObj[user._id.toString()] || 0
+      };
+    });
+
+    const filtered = finalData.filter(u => u.kycStatus === kycStatus);
+
+    res.status(200).json(filtered);
+  } catch (err) {
+    console.error("🔴 Error in getUsersForPayoutApproval:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
 
 exports.approveAndGeneratePayout = async (req, res) => {
   try {
@@ -204,7 +205,10 @@ exports.approveAndGeneratePayout = async (req, res) => {
         continue;
       }
 
-      const totalAmount = commissions.reduce((sum, c) => sum + c.amount, 0);
+      // Sum all commission amounts as numbers (decimal safe)
+      const totalAmount = Number(
+        commissions.reduce((sum, c) => sum + Number(c.amount), 0).toFixed(2)
+      );
 
       await Commissions.updateMany(
         { _id: { $in: commissions.map((c) => c._id) } },
@@ -229,39 +233,31 @@ exports.approveAndGeneratePayout = async (req, res) => {
         continue;
       }
 
-      console.log("✅ KYC Details:", {
-        accountHolderName: kyc.accountHolderName,
-        accountNumber: kyc.accountNumber,
-        ifscCode: kyc.ifscCode,
-      });
+      const tdsPercent = 2; // configurable agar chahiye toh
+      // Calculate TDS and Net Amount precisely
+      const tdsAmount = Number(((tdsPercent / 100) * totalAmount).toFixed(2));
+      const netAmount = Number((totalAmount - tdsAmount).toFixed(2));
 
       const pastUnpaid = await Commissions.aggregate([
-        {
-          $match: {
-            userId: userId,
-            status: "unpaid",
-            createdAt: { $lt: start },
-          },
-        },
-        {
-          $group: {
-            _id: "$userId",
-            unpaid: { $sum: "$amount" },
-          },
-        },
+        { $match: { userId: userId, status: "unpaid", createdAt: { $lt: start } } },
+        { $group: { _id: "$userId", unpaid: { $sum: "$amount" } } },
       ]);
 
       const unpaidAmount = pastUnpaid[0]?.unpaid || 0;
       const remarks = unpaidAmount > 0 ? `last week payout pending: ₹${unpaidAmount}` : "";
 
-      // ✅ Include commissionIds when creating payout
       await Payout.create({
         userId,
-        commissionIds: commissions.map(c => c._id), // <-- ✅ critical
+        commissionIds: commissions.map(c => c._id),
         beneficiaryName: kyc.accountHolderName,
         accountNumber: kyc.accountNumber,
         ifscCode: kyc.ifscCode,
         totalAmount: totalAmount,
+        tds: {
+          amount: tdsAmount,
+          percent: tdsPercent,
+        },
+        netAmount: netAmount,
         status: "approved",
         transactionType: "NEFT",
         remarks,
@@ -274,7 +270,9 @@ exports.approveAndGeneratePayout = async (req, res) => {
         "Beneficiary Account Number": kyc.accountNumber,
         IFSC: kyc.ifscCode,
         "Transaction Type": "NEFT",
-        Amount: totalAmount,
+        "Total Amount": totalAmount,
+        "TDS Amount": tdsAmount,
+        Amount: netAmount,
         Currency: "INR",
         "Beneficiary Email ID": user.email,
         Remarks: remarks,
@@ -305,33 +303,32 @@ exports.approveAndGeneratePayout = async (req, res) => {
   }
 };
 
-
 exports.listPayoutCSVFiles = async (req, res) => {
-    try {
-        const payoutDir = path.join(__dirname, "..", "downloads", "payouts");
+  try {
+    const payoutDir = path.join(__dirname, "..", "downloads", "payouts");
 
-        if (!fs.existsSync(payoutDir)) {
-            return res.status(200).json([]);
-        }
-
-        const files = fs.readdirSync(payoutDir).filter(file => file.endsWith(".csv"));
-
-        const data = files.map(file => {
-            const filePath = path.join(payoutDir, file);
-            const stats = fs.statSync(filePath);
-
-            return {
-                fileName: file,
-                url: `/downloads/payouts/${file}`,
-                createdAt: stats.birthtime
-            };
-        });
-
-        res.status(200).json(data.reverse());
-    } catch (err) {
-        console.error("❌ Error in listPayoutCSVFiles:", err);
-        res.status(500).json({ message: "Unable to fetch files" });
+    if (!fs.existsSync(payoutDir)) {
+      return res.status(200).json([]);
     }
+
+    const files = fs.readdirSync(payoutDir).filter(file => file.endsWith(".csv"));
+
+    const data = files.map(file => {
+      const filePath = path.join(payoutDir, file);
+      const stats = fs.statSync(filePath);
+
+      return {
+        fileName: file,
+        url: `/downloads/payouts/${file}`,
+        createdAt: stats.birthtime
+      };
+    });
+
+    res.status(200).json(data.reverse());
+  } catch (err) {
+    console.error("❌ Error in listPayoutCSVFiles:", err);
+    res.status(500).json({ message: "Unable to fetch files" });
+  }
 };
 
 exports.uploadBankResponse = async (req, res) => {
@@ -353,7 +350,7 @@ exports.uploadBankResponse = async (req, res) => {
       const csvData = fs.readFileSync(filePath);
       const lines = csvData.toString().split("\n");
       const headers = lines[0].split(",");
-      lines.slice(1).forEach((line, index) => {
+      lines.slice(1).forEach((line) => {
         if (!line.trim()) return;
         const data = line.split(",");
         const row = {};
@@ -401,7 +398,7 @@ exports.uploadBankResponse = async (req, res) => {
 
       const payout = await Payout.findOne({
         userId: user._id,
-        totalAmount: { $gte: amount - 0.01, $lte: amount + 0.01 },
+        netAmount: { $gte: amount - 0.01, $lte: amount + 0.01 },
         status: "approved",
         createdAt: {
           $gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
@@ -418,8 +415,8 @@ exports.uploadBankResponse = async (req, res) => {
       payout.transactionType = type;
       payout.transactionDate = txnDate || new Date();
       payout.utrNumber = utr || null;
-      payout.status = status.toLowerCase() === "success" ? "paid" : "unpaid";
-      payout.remarks = status.toLowerCase() === "success" ? "✅ Payout completed" : (errors || "❌ Bank error");
+      payout.status = status.toLowerCase() === "success" ? "paid" : "failed";
+      payout.remarks = payout.status === "paid" ? "✅ Payout completed" : (errors || "❌ Bank error");
 
       await payout.save();
       console.log(`✅ Updated payout status for ${email} to "${payout.status}"`);
@@ -436,6 +433,26 @@ exports.uploadBankResponse = async (req, res) => {
       );
 
       console.log(`🪙 Updated ${updated.modifiedCount} commissions for ${email} to "${commissionStatus}"`);
+
+      const tdsAmount = payout.tds?.amount || 0;
+      const netPaid = payout.netAmount || (payout.totalAmount - tdsAmount);
+
+      if (payout.status === "paid") {
+        await sendPayoutSuccessEmail({
+          to: user.email,
+          name: user.fullName,
+          totalAmount: payout.totalAmount,
+          tdsAmount,
+          netAmount: netPaid,
+        });
+      } else {
+        await sendPayoutFailureEmail({
+          to: user.email,
+          name: user.fullName,
+          reason: payout.erros,
+          netAmount: payout.netAmount,
+        });
+      }
     }
 
     return res.status(200).json({ message: "✅ Bank response uploaded and processed successfully." });
@@ -445,25 +462,26 @@ exports.uploadBankResponse = async (req, res) => {
   }
 };
 
+
 exports.downloadWeeklyPayoutCSV = async (req, res) => {
-    try {
-        const { weekStart, weekEnd } = req.query;
-        const folderPath = path.join(__dirname, "..", "downloads", "payouts");
+  try {
+    const { weekStart, weekEnd } = req.query;
+    const folderPath = path.join(__dirname, "..", "downloads", "payouts");
 
-        const prefix = `payout-week-${weekStart}-to-${weekEnd}`;
-        const files = fs.readdirSync(folderPath);
-        const matchedFile = files.find((f) => f.startsWith(prefix));
+    const prefix = `payout-week-${weekStart}-to-${weekEnd}`;
+    const files = fs.readdirSync(folderPath);
+    const matchedFile = files.find((f) => f.startsWith(prefix));
 
-        if (!matchedFile) {
-            return res.status(404).json({ message: "CSV file not found for selected week" });
-        }
-
-        const filePath = path.join(folderPath, matchedFile);
-        return res.download(filePath, matchedFile); // sends filename in response header
-    } catch (err) {
-        console.error("❌ CSV Download Error:", err);
-        res.status(500).json({ message: "Failed to download payout file" });
+    if (!matchedFile) {
+      return res.status(404).json({ message: "CSV file not found for selected week" });
     }
+
+    const filePath = path.join(folderPath, matchedFile);
+    return res.download(filePath, matchedFile); // sends filename in response header
+  } catch (err) {
+    console.error("❌ CSV Download Error:", err);
+    res.status(500).json({ message: "Failed to download payout file" });
+  }
 };
 
 
@@ -535,5 +553,148 @@ exports.createTraining = async (req, res) => {
   } catch (err) {
     console.error("❌ Admin training creation error:", err);
     res.status(500).json({ message: "Failed to create training" });
+  }
+};
+
+
+// ✅ Generate Token
+const generateToken = (id) => {
+  return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+};
+
+// ✅ Get All Users Summary for Admin Dashboard
+exports.getAllUserSummaries = async (req, res) => {
+  try {
+    const users = await User.find().populate("enrolledCourses.course", "title");
+
+    const results = await Promise.all(
+      users.map(async (user) => {
+        const commissions = await Commissions.find({ userId: user._id });
+
+        const totalEarnings = commissions.reduce((acc, c) => acc + c.amount, 0);
+        const totalPaid = commissions
+          .filter((c) => c.status === "paid")
+          .reduce((acc, c) => acc + c.amount, 0);
+        const totalUnpaid = commissions
+          .filter((c) => c.status === "pending" || c.status === "unpaid")
+          .reduce((acc, c) => acc + c.amount, 0);
+
+        const sponsor = user.sponsorCode
+          ? await User.findOne({ affiliateCode: user.sponsorCode })
+          : null;
+
+        return {
+          userId: user.affiliateCode,
+          name: user.fullName,
+          mobile: user.mobileNumber,
+          email: user.email,
+          enrolledBundles: user.enrolledCourses.map((ec) => ec.course?.title),
+          sponsorId: user.sponsorCode || "N/A",
+          sponsorName: sponsor?.fullName || "N/A",
+          totalEarnings,
+          totalPaid,
+          totalUnpaid,
+          dateOfJoining: user.createdAt,
+          kycStatus: user.kycStatus || "not-submitted",
+          _id: user._id,
+        };
+      })
+    );
+
+    res.status(200).json(results);
+  } catch (err) {
+    console.error("❌ Error in getAllUserSummaries:", err);
+    res.status(500).json({ message: "Failed to fetch user summaries" });
+  }
+};
+
+// ✅ Admin Login As User (Impersonate)
+exports.loginAsUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const token = generateToken(user._id);
+    const isProduction = process.env.NODE_ENV === "production";
+
+    res.cookie("impersonation_token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+
+    res.status(200).json({ message: `Logged in as ${user.fullName}` });
+  } catch (err) {
+    console.error("❌ Error in loginAsUser:", err);
+    res.status(500).json({ message: "Impersonation failed" });
+  }
+};
+
+
+// Get all pending KYCs
+exports.getPendingKycs = async (req, res) => {
+  try {
+    const pendingUsers = await User.find({ kycStatus: "pending" }).lean();
+    const userIds = pendingUsers.map(u => u._id);
+
+    const kycs = await UserKyc.find({ userId: { $in: userIds } }).select("-__v").lean();
+
+    const merged = pendingUsers.map(user => {
+      const kyc = kycs.find(k => k.userId?.toString() === user._id.toString());
+
+      return {
+        ...user,
+        kycDetails: kyc ? {
+          accountHolderName: kyc.accountHolderName || "",
+          accountNumber: kyc.accountNumber || "",
+          ifscCode: kyc.ifscCode || "",
+          aadharFrontImage: kyc.aadhaarFrontImage || "",
+          aadharBackImage: kyc.aadhaarBackImage || "",
+          panProofImage: kyc.panProofImage || "",
+          status: kyc.kycStatus || "pending",
+          rejectReason: kyc.rejectionReason || ""
+        } : {}
+      };
+    });
+
+    res.status(200).json(merged);
+  } catch (err) {
+    console.error("❌ KYC Fetch Error:", err.message, err.stack);
+    res.status(500).json({ message: "Error fetching KYC data" });
+  }
+};
+
+
+
+// adminController.js
+exports.updateKycStatus = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { status, reason } = req.body; // status: "approved" / "rejected"
+
+    // 1. Update User's primary KYC status
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { kycStatus: status },
+      { new: true }
+    );
+
+    // 2. Update secondary UserKyc (save rejection reason also)
+    const kyc = await UserKyc.findOneAndUpdate(
+      { user: userId },
+      { status, rejectionReason: reason || "" },
+      { new: true }
+    );
+
+    res.status(200).json({
+      message: `✅ KYC ${status}`,
+      user,
+      kyc,
+    });
+  } catch (err) {
+    console.error("❌ KYC Update Error:", err.message, err.stack);
+    res.status(500).json({ message: "Failed to update KYC status" });
   }
 };

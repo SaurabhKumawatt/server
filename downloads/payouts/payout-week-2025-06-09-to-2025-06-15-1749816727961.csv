@@ -1,0 +1,2 @@
+"Beneficiary Name","Beneficiary Account Number","IFSC","Transaction Type","Amount","TDS Amount","Net Amount","Currency","Beneficiary Email ID","Remarks"
+"lucky","33158896154","SBIN0070633","NEFT",24,0.48,23.52,"INR","lucky@example.com",""

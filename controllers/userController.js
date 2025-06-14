@@ -630,7 +630,7 @@ exports.forgotPassword = async (req, res) => {
 
     await user.save();
 
-    await sendOtpEmail({ to: email, otp: otpCode });
+    await sendOtpEmail({ to: email, otp: otpCode, name: user.fullName });
 
     res.status(200).json({ message: "OTP sent to your email" });
   } catch (err) {

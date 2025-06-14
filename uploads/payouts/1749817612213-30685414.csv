@@ -1,0 +1,3 @@
+Beneficiary Name,Beneficiary Account Number,IFSC,Transaction Type,Debit Account No,Transaction Date,Amount,Currency,Beneficiary Email ID,UTR Number,Status,Errors
+lucky,3.32E+10,SBIN0070633,NEFT,,,9.8,INR,lucky@example.com,,Success,
+Saurabh Kumawat,3.32E+10,SBIN0030037,NEFT,,,4557,INR,saurabhkumawat8959@gmail.com,,Failure,

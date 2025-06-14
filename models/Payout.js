@@ -22,6 +22,26 @@ const payoutSchema = new mongoose.Schema(
       min: [0, "Payout amount cannot be negative"],
     },
 
+    tds: {
+      amount: {
+        type: Number,
+        default: 0,
+        min: [0, "TDS amount cannot be negative"],
+      },
+      percent: {
+        type: Number,
+        default: 2, // Default 2% TDS
+        min: [0, "TDS percent cannot be negative"],
+        max: [100, "TDS percent cannot exceed 100"],
+      },
+    },
+
+    netAmount: {
+      type: Number,
+      default: 0,
+      min: [0, "Net payout amount cannot be negative"],
+    },
+
     beneficiaryName: {
       type: String,
       required: [true, "Beneficiary name is required"],
@@ -82,7 +102,6 @@ const payoutSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Optional: indexes to speed up queries
 payoutSchema.index({ userId: 1, status: 1 });
 payoutSchema.index({ transactionDate: 1 });
 

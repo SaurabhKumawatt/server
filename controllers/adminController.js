@@ -20,6 +20,8 @@ const Enrollments = require("../models/Enrollments");
 const Leads = require("../models/Leads");
 const Course = require("../models/Course");
 const { Types } = require("mongoose");
+const Payment = require("../models/Payment");
+
 
 
 exports.getUsersForPayout = async (req, res) => {
@@ -657,18 +659,18 @@ exports.getPendingKycs = async (req, res) => {
         ...user,
         kycDetails: kyc
           ? {
-              accountHolderName: kyc.accountHolderName || "",
-              accountNumber: decrypt(kyc.accountNumber) || "",
-              ifscCode: kyc.ifscCode || "",
-              upiId: decrypt(kyc.upiId) || "",
-              aadhaarNumber: decrypt(kyc.aadhaarNumber) || "",
-              panCard: decrypt(kyc.panCard) || "",
-              aadharFrontImage: kyc.aadhaarFrontImage || "",
-              aadharBackImage: kyc.aadhaarBackImage || "",
-              panProofImage: kyc.panProofImage || "",
-              status: kyc.kycStatus || "pending",
-              rejectReason: kyc.rejectionReason || "",
-            }
+            accountHolderName: kyc.accountHolderName || "",
+            accountNumber: decrypt(kyc.accountNumber) || "",
+            ifscCode: kyc.ifscCode || "",
+            upiId: decrypt(kyc.upiId) || "",
+            aadhaarNumber: decrypt(kyc.aadhaarNumber) || "",
+            panCard: decrypt(kyc.panCard) || "",
+            aadharFrontImage: kyc.aadhaarFrontImage || "",
+            aadharBackImage: kyc.aadhaarBackImage || "",
+            panProofImage: kyc.panProofImage || "",
+            status: kyc.kycStatus || "pending",
+            rejectReason: kyc.rejectionReason || "",
+          }
           : {},
       };
     });
@@ -735,32 +737,49 @@ exports.bulkRegisterAndEnrollWithRelations = async (req, res) => {
         continue;
       }
 
-      const course = await Course.findById(courseId).select("relatedBundleCourses relatedCourses");
+      const course = await Course.findById(courseId).select("relatedBundleIds relatedCourses");
       if (!course) {
         results.push({ email, status: "Invalid courseId" });
         continue;
       }
 
-      // Generate affiliate code
-      const lastUser = await User.findOne({ affiliateCode: { $regex: /^SV\d+$/ } }).sort({ createdAt: -1 });
-      const lastNum = lastUser?.affiliateCode ? parseInt(lastUser.affiliateCode.replace("SV", "")) : 1000;
-      const affiliateCode = `SV${lastNum + 1}`;
+      let affiliateCode;
+      let nextNum = 1000;
+      let isUnique = false;
 
+      while (!isUnique) {
+        const lastUser = await User.findOne({
+          affiliateCode: { $regex: /^SV\d+$/ }
+        }).sort({ affiliateCode: -1 }); // 🧠 sort numerically descending
 
+        nextNum = lastUser
+          ? parseInt(lastUser.affiliateCode.replace("SV", "")) + 1
+          : 1000;
+
+        affiliateCode = `SV${nextNum}`;
+
+        const existingUser = await User.findOne({ affiliateCode });
+        if (!existingUser) {
+          isUnique = true;
+        } else {
+          nextNum++; // just in case a conflict happens in rare cases
+        }
+      }
+      const firstName = fullName.split(" ")[0].toLowerCase();
+      const generatedPassword = `${firstName}@123`;
       const newUser = await User.create({
         fullName,
         username,
         email: email.toLowerCase(),
         mobileNumber,
-        password: password,
+        password: generatedPassword,
         sponsorCode,
         address,
         dob,
         role: "paid-affiliate",
-        affiliateCode
+        affiliateCode,
       });
 
-      // Create lead if sponsorCode is valid
       if (sponsorCode) {
         const sponsor = await User.findOne({ affiliateCode: sponsorCode });
         if (sponsor) {
@@ -770,32 +789,83 @@ exports.bulkRegisterAndEnrollWithRelations = async (req, res) => {
             name: newUser.fullName,
             email: newUser.email,
             mobile: newUser.mobileNumber,
-            bundleCourseId: courseId
+            bundleCourseId: courseId,
           });
         }
       }
 
-      // Enroll in selected + related bundles + related courses
-      const allCourseIds = new Set([
-        courseId,
-        ...(course.relatedBundleCourses || []),
-        ...(course.relatedCourses || [])
-      ].map(id => id.toString()));
+      // ✅ Step 1: Build full course list
+      const enrolledCourseIds = new Set([courseId.toString()]);
+      (course.relatedCourses || []).forEach(cid => enrolledCourseIds.add(cid.toString()));
 
-      for (const cid of allCourseIds) {
-        try {
-          await Enrollments.create({
-            userId: newUser._id,
-            courseId: cid,
-            status: "active",
-            paymentId: null // manual addition, no Razorpay here
+      if (course.relatedBundleIds?.length > 0) {
+        const relatedBundles = await Course.find({
+          _id: { $in: course.relatedBundleIds }
+        }).select("relatedCourses");
+
+        for (const bundle of relatedBundles) {
+          enrolledCourseIds.add(bundle._id.toString());
+          (bundle.relatedCourses || []).forEach(cid => {
+            if (cid) enrolledCourseIds.add(cid.toString());
           });
-        } catch (err) {
-          console.warn(`⚠️ Skipping duplicate enrollment for user ${email} in course ${cid}`);
         }
       }
 
-      // Send Welcome Email
+      // ✅ Step 2: Create one dummy payment
+      const dummyOrderId = `MANUAL_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      const dummyPaymentId = `MANUAL_PAYID_${Date.now()}_${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+
+      console.log(`👉 Creating payment for ${email}`);
+
+      const payment = await Payment.create({
+        user: newUser._id,
+        course: courseId,
+        razorpayOrderId: dummyOrderId,
+        razorpayPaymentId: dummyPaymentId,
+        amountPaid: 0,
+        currency: "INR",
+        status: "created",
+        paidAt: new Date(),
+        forBundleCourseId: courseId,
+        remarks: "Pre Access To Special Members"
+      });
+
+      console.log(`✅ Payment ID: ${payment._id}`);
+
+      // ✅ Step 3: Enroll in all collected course IDs
+      for (const cid of enrolledCourseIds) {
+        if (!cid) continue;
+
+        const alreadyEnrolled = await Enrollments.findOne({
+          userId: newUser._id,
+          courseId: cid
+        });
+
+        if (alreadyEnrolled) {
+          console.warn(`⚠️ Already enrolled: ${email} in course ${cid}`);
+          continue;
+        }
+
+        await Enrollments.create({
+          userId: newUser._id,
+          courseId: cid,
+          status: "active",
+          paymentId: payment._id
+        });
+
+        console.log(`✅ Enrolled ${email} in course ${cid}`);
+      }
+
+      // ✅ Step 4: Update user's enrolledCourses array
+      await User.findByIdAndUpdate(newUser._id, {
+        $addToSet: {
+          enrolledCourses: {
+            $each: Array.from(enrolledCourseIds).map(cid => ({ course: cid }))
+          }
+        }
+      });
+
+      // ✅ Step 5: Welcome email
       await sendWelcomeEmail({
         to: newUser.email,
         name: newUser.fullName
@@ -804,6 +874,7 @@ exports.bulkRegisterAndEnrollWithRelations = async (req, res) => {
       results.push({ email, status: "Created and enrolled" });
 
     } catch (error) {
+      console.error(`❌ Error for ${userData.email}:`, error.message);
       results.push({ email: userData.email, status: "Error", error: error.message });
     }
   }

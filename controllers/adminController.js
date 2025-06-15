@@ -13,6 +13,13 @@ const Payout = require("../models/Payout");
 const Training = require("../models/Training");
 const jwt = require("jsonwebtoken");
 const { sendPayoutSuccessEmail, sendPayoutFailureEmail } = require("../utils/email");
+const { decrypt } = require("../utils/encrypt");
+const bcrypt = require("bcryptjs");
+const { sendWelcomeEmail } = require("../utils/email");
+const Enrollments = require("../models/Enrollments");
+const Leads = require("../models/Leads");
+const Course = require("../models/Course");
+const { Types } = require("mongoose");
 
 
 exports.getUsersForPayout = async (req, res) => {
@@ -637,25 +644,32 @@ exports.loginAsUser = async (req, res) => {
 exports.getPendingKycs = async (req, res) => {
   try {
     const pendingUsers = await User.find({ kycStatus: "pending" }).lean();
-    const userIds = pendingUsers.map(u => u._id);
+    const userIds = pendingUsers.map((u) => u._id);
 
-    const kycs = await UserKyc.find({ userId: { $in: userIds } }).select("-__v").lean();
+    const kycs = await UserKyc.find({ userId: { $in: userIds } })
+      .select("-__v")
+      .lean();
 
-    const merged = pendingUsers.map(user => {
-      const kyc = kycs.find(k => k.userId?.toString() === user._id.toString());
+    const merged = pendingUsers.map((user) => {
+      const kyc = kycs.find((k) => k.userId?.toString() === user._id.toString());
 
       return {
         ...user,
-        kycDetails: kyc ? {
-          accountHolderName: kyc.accountHolderName || "",
-          accountNumber: kyc.accountNumber || "",
-          ifscCode: kyc.ifscCode || "",
-          aadharFrontImage: kyc.aadhaarFrontImage || "",
-          aadharBackImage: kyc.aadhaarBackImage || "",
-          panProofImage: kyc.panProofImage || "",
-          status: kyc.kycStatus || "pending",
-          rejectReason: kyc.rejectionReason || ""
-        } : {}
+        kycDetails: kyc
+          ? {
+              accountHolderName: kyc.accountHolderName || "",
+              accountNumber: decrypt(kyc.accountNumber) || "",
+              ifscCode: kyc.ifscCode || "",
+              upiId: decrypt(kyc.upiId) || "",
+              aadhaarNumber: decrypt(kyc.aadhaarNumber) || "",
+              panCard: decrypt(kyc.panCard) || "",
+              aadharFrontImage: kyc.aadhaarFrontImage || "",
+              aadharBackImage: kyc.aadhaarBackImage || "",
+              panProofImage: kyc.panProofImage || "",
+              status: kyc.kycStatus || "pending",
+              rejectReason: kyc.rejectionReason || "",
+            }
+          : {},
       };
     });
 
@@ -665,7 +679,6 @@ exports.getPendingKycs = async (req, res) => {
     res.status(500).json({ message: "Error fetching KYC data" });
   }
 };
-
 
 
 // adminController.js
@@ -697,4 +710,103 @@ exports.updateKycStatus = async (req, res) => {
     console.error("❌ KYC Update Error:", err.message, err.stack);
     res.status(500).json({ message: "Failed to update KYC status" });
   }
+};
+
+
+exports.bulkRegisterAndEnrollWithRelations = async (req, res) => {
+  const { users } = req.body;
+
+  if (!Array.isArray(users)) {
+    return res.status(400).json({ message: "users must be an array" });
+  }
+
+  const results = [];
+
+  for (const userData of users) {
+    try {
+      const {
+        fullName, username, email, mobileNumber,
+        password, sponsorCode, courseId, address, dob
+      } = userData;
+
+      const existing = await User.findOne({ email });
+      if (existing) {
+        results.push({ email, status: "Already exists" });
+        continue;
+      }
+
+      const course = await Course.findById(courseId).select("relatedBundleCourses relatedCourses");
+      if (!course) {
+        results.push({ email, status: "Invalid courseId" });
+        continue;
+      }
+
+      // Generate affiliate code
+      const lastUser = await User.findOne({ affiliateCode: { $regex: /^SV\d+$/ } }).sort({ createdAt: -1 });
+      const lastNum = lastUser?.affiliateCode ? parseInt(lastUser.affiliateCode.replace("SV", "")) : 1000;
+      const affiliateCode = `SV${lastNum + 1}`;
+
+
+      const newUser = await User.create({
+        fullName,
+        username,
+        email: email.toLowerCase(),
+        mobileNumber,
+        password: password,
+        sponsorCode,
+        address,
+        dob,
+        role: "paid-affiliate",
+        affiliateCode
+      });
+
+      // Create lead if sponsorCode is valid
+      if (sponsorCode) {
+        const sponsor = await User.findOne({ affiliateCode: sponsorCode });
+        if (sponsor) {
+          await Leads.create({
+            referralId: sponsor._id,
+            leadUserId: newUser._id,
+            name: newUser.fullName,
+            email: newUser.email,
+            mobile: newUser.mobileNumber,
+            bundleCourseId: courseId
+          });
+        }
+      }
+
+      // Enroll in selected + related bundles + related courses
+      const allCourseIds = new Set([
+        courseId,
+        ...(course.relatedBundleCourses || []),
+        ...(course.relatedCourses || [])
+      ].map(id => id.toString()));
+
+      for (const cid of allCourseIds) {
+        try {
+          await Enrollments.create({
+            userId: newUser._id,
+            courseId: cid,
+            status: "active",
+            paymentId: null // manual addition, no Razorpay here
+          });
+        } catch (err) {
+          console.warn(`⚠️ Skipping duplicate enrollment for user ${email} in course ${cid}`);
+        }
+      }
+
+      // Send Welcome Email
+      await sendWelcomeEmail({
+        to: newUser.email,
+        name: newUser.fullName
+      });
+
+      results.push({ email, status: "Created and enrolled" });
+
+    } catch (error) {
+      results.push({ email: userData.email, status: "Error", error: error.message });
+    }
+  }
+
+  res.json({ message: "Bulk processing complete", results });
 };

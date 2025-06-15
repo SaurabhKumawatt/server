@@ -1,9 +1,7 @@
-console.log("🛠️ Loading userRoutes");
-
 const express = require("express");
 const router = express.Router();
 const User = require("../models/User");
-const { check, validationResult } = require("express-validator");
+const { body, check, validationResult } = require("express-validator");
 
 // 🧠 Controllers
 const {
@@ -58,7 +56,15 @@ router.post(
   ],
   registerUser
 );
-router.post("/login", loginUser);
+router.post(
+  "/login",
+  [
+    body("email").isEmail().withMessage("Invalid email"),
+    body("password").isLength({ min: 6 }).withMessage("Password must be at least 6 characters"),
+  ],
+  loginUser
+);
+
 router.get("/logout", logoutUser);
 router.post("/forgot-password", forgotPassword);
 router.post("/verify-otp", verifyOtp);
@@ -89,7 +95,16 @@ router.put(
   uploadProfileImage.single("image"),
   updateUserProfile
 );
-router.put("/change-password", protect, changePassword);
+router.put(
+  "/change-password",
+  protect,
+  [
+    body("oldPassword").isString().notEmpty().withMessage("Old password is required"),
+    body("newPassword").isString().isLength({ min: 6 }).withMessage("New password must be at least 6 characters"),
+  ],
+  changePassword
+);
+
 
 
 // ==============================
@@ -116,7 +131,15 @@ router.get("/leads", protect, authorizeRoles("paid-affiliate", "admin"), getAffi
 router.delete("/leads/:id", protect, authorizeRoles("paid-affiliate", "admin"), deleteLeadById);
 router.get("/commissions", protect, authorizeRoles("paid-affiliate", "admin"), getAffiliateCommissions);
 router.get("/industry-earnings", protect, authorizeRoles("paid-affiliate", "admin"), getIndustryEarnings);
-router.post("/request-payout", protect, authorizeRoles("paid-affiliate", "admin"), requestPayout);
+router.post(
+  "/request-payout",
+  protect,
+  [
+    body("amount").isFloat({ gt: 0 }).withMessage("Amount must be a number greater than 0"),
+    body("commissionId").isMongoId().withMessage("Invalid commission ID"),
+  ],
+  requestPayout
+);
 router.get("/sales-stats", protect, authorizeRoles("paid-affiliate", "admin"), getSalesStats);
 router.get("/top-income-leads", protect, authorizeRoles("paid-affiliate", "admin"), getTopIncomeLeads);
 router.get("/payouts", protect, authorizeRoles("paid-affiliate", "admin"), getUserPayouts);
@@ -132,6 +155,10 @@ router.patch(
   "/:userId/industry-earnings",
   protect,
   authorizeRoles("admin"),
+  [
+    body("industryEarnings")
+      .isArray().withMessage("industryEarnings must be an array")
+  ],
   updateIndustryEarnings
 );
 

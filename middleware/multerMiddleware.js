@@ -30,9 +30,8 @@ const imageFileFilter = (req, file, cb) => {
     "image/jpeg",
     "image/jpg",
     "image/png",
-    "image/webp",
   ];
-  const allowedExt = [".jpeg", ".jpg", ".png", ".webp"];
+  const allowedExt = [".jpeg", ".jpg", ".png"];
 
   const ext = path.extname(file.originalname).toLowerCase();
   const isMimeOk = allowedMimeTypes.includes(file.mimetype);

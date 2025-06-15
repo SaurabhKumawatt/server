@@ -27,6 +27,7 @@ app.set("trust proxy", 1); // required for secure cookies & redirect
 
 // 🌐 CORS Config (with logging)
 const allowedOrigins = [
+  "http://localhost:5173",
   "https://www.stravix.in",
   "https://stravix.in",
   "https://stravix-testing-client.vercel.app",
@@ -37,7 +38,7 @@ app.use(cors({
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.warn(`🚫 CORS BLOCKED ORIGIN: ${origin}`);
+      console.warn(`CORS BLOCKED ORIGIN: ${origin}`);
       callback(new Error("Not allowed by CORS"));
     }
   },

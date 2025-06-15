@@ -14,6 +14,10 @@ const { sendWelcomeEmail } = require("../utils/email");
 const { sendOtpEmail } = require("../utils/email");
 const { validationResult } = require("express-validator");
 const { Types } = require("mongoose");
+const mongoose = require("mongoose");
+const sanitizeHtml = require("sanitize-html");
+const { encrypt } = require("../utils/encrypt");
+const { decrypt } = require("../utils/encrypt");
 
 
 // Generate JWT Token
@@ -29,16 +33,30 @@ exports.registerUser = async (req, res) => {
   }
 
   try {
+    // 🧼 Sanitize + normalize inputs
     const {
       fullName, username, email, mobileNumber,
       password, sponsorCode, address, state, dob,
     } = req.body;
 
+    const cleanData = {
+      fullName: sanitizeHtml(fullName.trim()),
+      username: sanitizeHtml(username.trim()),
+      email: sanitizeHtml(email.trim().toLowerCase()),
+      mobileNumber: sanitizeHtml(mobileNumber.trim()),
+      password,
+      sponsorCode: sponsorCode?.trim(),
+      address: sanitizeHtml(address?.trim() || ""),
+      state: sanitizeHtml(state?.trim() || ""),
+      dob
+    };
+
+    // 🔍 Check if email/mobile/username already exists
     const existingUser = await User.findOne({
       $or: [
-        { email },
-        { username },
-        { mobileNumber }
+        { email: cleanData.email },
+        { username: cleanData.username },
+        { mobileNumber: cleanData.mobileNumber }
       ]
     });
     if (existingUser) {
@@ -47,25 +65,24 @@ exports.registerUser = async (req, res) => {
       });
     }
 
-
+    // 🎯 Generate affiliate code
     const lastUser = await User.findOne({ affiliateCode: { $regex: /^SV\d+$/ } })
       .sort({ createdAt: -1 })
       .lean();
 
     let nextCodeNumber = 1001;
-    if (lastUser && lastUser.affiliateCode) {
+    if (lastUser?.affiliateCode) {
       const numPart = parseInt(lastUser.affiliateCode.replace("SV", ""));
       if (!isNaN(numPart)) {
         nextCodeNumber = numPart + 1;
       }
     }
-    const affiliateCode = `SV${nextCodeNumber}`;
+    cleanData.affiliateCode = `SV${nextCodeNumber}`;
+
+    // 🧑‍💻 Create user
     let newUser;
     try {
-      newUser = await User.create({
-        fullName, username, email, mobileNumber, password,
-        sponsorCode, affiliateCode, address, state, dob,
-      });
+      newUser = await User.create(cleanData);
     } catch (err) {
       if (err.code === 11000) {
         const field = Object.keys(err.keyValue)[0];
@@ -74,7 +91,7 @@ exports.registerUser = async (req, res) => {
       throw err;
     }
 
-    // 📧 Send welcome mail
+    // 📧 Welcome Email
     try {
       await sendWelcomeEmail({
         to: newUser.email,
@@ -84,9 +101,9 @@ exports.registerUser = async (req, res) => {
       console.error("📭 Failed to send welcome email:", mailErr.message);
     }
 
-    // ➕ Create lead if sponsor is valid
-    if (sponsorCode) {
-      const referrer = await User.findOne({ affiliateCode: sponsorCode });
+    // 🤝 Create lead if sponsorCode is valid
+    if (cleanData.sponsorCode) {
+      const referrer = await User.findOne({ affiliateCode: cleanData.sponsorCode });
       if (referrer) {
         await Leads.create({
           referralId: referrer._id,
@@ -99,17 +116,18 @@ exports.registerUser = async (req, res) => {
       }
     }
 
+    // 🍪 Auth Token Cookie
     const token = generateToken(newUser._id);
     const isProduction = process.env.NODE_ENV === "production";
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: isProduction,                       // 🔁 false for localhost
-      sameSite: isProduction ? "None" : "Lax",    // 🔁 Lax for localhost
+      secure: isProduction,
+      sameSite: isProduction ? "None" : "Lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       message: "Registered successfully. Please complete your enrollment.",
       user: {
         _id: newUser._id,
@@ -121,94 +139,156 @@ exports.registerUser = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("❌ Registration error:", err);
-    res.status(500).json({ message: "Something went wrong" });
+    console.error("Registration error:", err);
+    return res.status(500).json({ message: "Something went wrong" });
   }
 };
 
 // ✅ Login
 exports.loginUser = async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(422).json({ errors: errors.array() });
+  }
+
   try {
-    const { email, password } = req.body;
+    // 🧼 Sanitize and normalize input
+    const email = sanitizeHtml(req.body.email.trim().toLowerCase());
+    const password = req.body.password;
+
     const user = await User.findOne({ email });
     if (!user || !(await user.matchPassword(password))) {
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
+    // 🍪 Auth token
     const token = generateToken(user._id);
     const isProduction = process.env.NODE_ENV === "production";
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: isProduction,                       // 🔁 false for localhost
-      sameSite: isProduction ? "None" : "Lax",    // 🔁 Lax for localhost
+      secure: isProduction,
+      sameSite: isProduction ? "None" : "Lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    res.status(200).json({ message: "Login successful", user });
+    return res.status(200).json({
+      message: "Login successful",
+      user: {
+        _id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        mobileNumber: user.mobileNumber,
+        sponsorCode: user.sponsorCode,
+        affiliateCode: user.affiliateCode,
+      },
+    });
   } catch (err) {
-    res.status(500).json({ message: "Something went wrong" });
+    console.error("Login error:", err);
+    return res.status(500).json({ message: "Something went wrong" });
   }
 };
 
+
 // ✅ Logout
 exports.logoutUser = (req, res) => {
-  
-  res.clearCookie("token", {
-    httpOnly: true,
-    sameSite: "None",
-    secure: process.env.NODE_ENV === "development",
-  });
-  res.status(200).json({ message: "Logged out successfully" });
+  try {
+    const isProduction = process.env.NODE_ENV === "production";
+
+    res.clearCookie("token", {
+      httpOnly: true,
+      sameSite: isProduction ? "None" : "Lax",
+      secure: isProduction,
+    });
+
+    res.status(200).json({ message: "Logged out successfully" });
+  } catch (err) {
+    console.error("❌ Logout error:", err);
+    res.status(500).json({ message: "Failed to logout" });
+  }
 };
+
 
 // ✅ Get Profile
 exports.getLoggedInUserProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select("-password").populate("enrolledCourses.course", "title price");
+    const user = await User.findById(req.user._id)
+      .select("-password")
+      .populate("enrolledCourses.course", "title price");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
     let sponsor = null;
 
     if (user.sponsorCode) {
       sponsor = await User.findOne({ affiliateCode: user.sponsorCode }).select("fullName");
     }
 
-    res.json({ ...user.toObject(), sponsorName: sponsor?.fullName || null });
+    res.status(200).json({
+      ...user.toObject(),
+      sponsorName: sponsor?.fullName || null,
+    });
   } catch (err) {
+    console.error("❌ Error fetching user profile:", err);
     res.status(500).json({ message: "Failed to fetch user profile" });
   }
 };
 
+
 // ✅ Update Profile
 exports.updateUserProfile = async (req, res) => {
   try {
-    const updates = req.body;
-    if (req.file && req.file.path) {
-      updates.profileImage = req.file.path; // Cloudinary returns full URL here
+    const updates = {};
+
+    // ✅ Only allow specific fields to be updated
+    const allowedFields = ["email", "mobileNumber", "dob", "state", "address"];
+
+    for (const key of allowedFields) {
+      if (req.body[key]) {
+        updates[key] = sanitizeHtml(req.body[key].toString().trim());
+      }
     }
 
+    // ✅ Handle profile image if uploaded
+    if (req.file?.path) {
+      updates.profileImage = req.file.path; // full Cloudinary URL
+    }
 
-    const updatedUser = await User.findByIdAndUpdate(req.user._id, updates, {
-      new: true,
-      runValidators: true,
-    }).select("-password");
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user._id,
+      updates,
+      { new: true, runValidators: true }
+    ).select("-password");
 
-    res.json(updatedUser);
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json(updatedUser);
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    console.error("Profile update error:", err);
+    res.status(400).json({ message: "Failed to update profile" });
   }
 };
 
 // ✅ Change Password
 exports.changePassword = async (req, res) => {
   try {
-    const { oldPassword, newPassword } = req.body;
+    const oldPassword = sanitizeHtml(req.body.oldPassword?.trim() || "");
+    const newPassword = sanitizeHtml(req.body.newPassword?.trim() || "");
 
     if (!oldPassword || !newPassword) {
       return res.status(400).json({ message: "Both old and new passwords are required." });
     }
 
-    if (typeof newPassword !== "string" || newPassword.length < 6) {
+    if (newPassword.length < 6) {
       return res.status(400).json({ message: "New password must be at least 6 characters." });
+    }
+
+    if (oldPassword === newPassword) {
+      return res.status(400).json({ message: "Old and new password cannot be the same" });
     }
 
     if (!Types.ObjectId.isValid(req.user._id)) {
@@ -220,86 +300,131 @@ exports.changePassword = async (req, res) => {
       return res.status(404).json({ message: "User not found." });
     }
 
-    if (!(await user.matchPassword(oldPassword))) {
+    const isMatch = await user.matchPassword(oldPassword);
+    if (!isMatch) {
       return res.status(401).json({ message: "Old password is incorrect" });
-    }
-
-    if (oldPassword === newPassword) {
-      return res.status(400).json({ message: "Old and new password cannot be the same" });
     }
 
     user.password = newPassword;
     await user.save();
 
-    console.log(`[SECURITY] Password changed for user: ${user.email} at ${new Date().toISOString()}`);
+    console.log(`[SECURITY] Password changed for ${user.email} at ${new Date().toISOString()}`);
 
-    res.json({ message: "Password updated successfully" });
+    return res.status(200).json({ message: "Password updated successfully" });
   } catch (err) {
-    console.error("❌ Password change error:", err.message);
-    res.status(400).json({ message: "Password change failed" });
+    console.error("Password change error:", err);
+    return res.status(500).json({ message: "Password change failed" });
   }
 };
 
 // ✅ Get KYC Status
 exports.getKycStatus = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
-    const kyc = await UserKyc.findOne({ userId: req.user._id }).lean();
+    const userId = req.user._id;
 
-    if (!user) return res.status(404).json({ message: "User not found" });
+    const [user, kycRaw] = await Promise.all([
+      User.findById(userId).select("kycStatus kycReason"),
+      UserKyc.findOne({ userId }).lean(),
+    ]);
 
-    res.status(200).json({
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // 🔓 Decrypt sensitive fields if KYC exists
+    const kyc = kycRaw
+      ? {
+          ...kycRaw,
+          accountNumber: decrypt(kycRaw.accountNumber),
+          aadhaarNumber: decrypt(kycRaw.aadhaarNumber),
+          panCard: decrypt(kycRaw.panCard),
+          upiId: decrypt(kycRaw.upiId),
+        }
+      : null;
+
+    return res.status(200).json({
       status: user.kycStatus || "not-submitted",
       reason: user.kycReason || null,
-      kyc: kyc || null,
+      kyc,
     });
   } catch (err) {
-    console.error("❌ Error fetching KYC status:", err);
-    res.status(500).json({ message: "Server error while fetching KYC" });
+    console.error("❌ Error fetching KYC status:", err.message);
+    return res.status(500).json({ message: "Server error while fetching KYC" });
   }
 };
-
 
 
 // ✅ Submit KYC
 exports.submitKycDetails = async (req, res) => {
   try {
-    const existing = await UserKyc.findOne({ userId: req.user._id });
-    if (existing) return res.status(400).json({ message: "KYC already submitted" });
+    const userId = req.user._id;
 
-    const kyc = await UserKyc.create({
-      userId: req.user._id,
-      ...req.body,
-      aadhaarFrontImage: req.files?.aadhaarFrontImage?.[0]?.path,
-      aadhaarBackImage: req.files?.aadhaarBackImage?.[0]?.path,
-      panProofImage: req.files?.panProofImage?.[0]?.path,
-    });
+    const existing = await UserKyc.findOne({ userId });
+    if (existing) {
+      return res.status(400).json({ message: "KYC already submitted" });
+    }
+
+    // 🧼 Sanitize + 🔐 Encrypt
+    const cleanData = {
+      userId,
+      accountHolderName: sanitizeHtml(req.body.accountHolderName?.trim() || ""),
+      accountNumber: encrypt(sanitizeHtml(req.body.accountNumber?.trim() || "")),
+      bankName: sanitizeHtml(req.body.bankName?.trim() || ""),
+      ifscCode: sanitizeHtml(req.body.ifscCode?.trim() || ""),
+      branch: sanitizeHtml(req.body.branch?.trim() || ""),
+      upiId: encrypt(sanitizeHtml(req.body.upiId?.trim() || "")),
+      aadhaarNumber: encrypt(sanitizeHtml(req.body.aadhaarNumber?.trim() || "")),
+      panCard: encrypt(sanitizeHtml(req.body.panCard?.trim() || "")),
+      aadhaarFrontImage: req.files?.aadhaarFrontImage?.[0]?.path || null,
+      aadhaarBackImage: req.files?.aadhaarBackImage?.[0]?.path || null,
+      panProofImage: req.files?.panProofImage?.[0]?.path || null,
+    };
+
+    // ✅ Check file uploads
+    if (!cleanData.aadhaarFrontImage || !cleanData.aadhaarBackImage || !cleanData.panProofImage) {
+      return res.status(400).json({ message: "All 3 document images are required" });
+    }
+
+    const kyc = await UserKyc.create(cleanData);
 
     res.status(201).json({ message: "KYC submitted successfully", kyc });
   } catch (err) {
-    console.error("❌ KYC submission error:", err);
-    res.status(400).json({ message: err.message });
+    console.error("❌ KYC submission error:", err.message);
+    res.status(500).json({ message: "Failed to submit KYC" });
   }
 };
 
 // ✅ Get Leads
 exports.getAffiliateLeads = async (req, res) => {
   try {
-    const leads = await Leads.find({ referralId: req.user._id, status: "new" })
+    const leads = await Leads.find({
+      referralId: req.user._id,
+      status: "new"
+    })
       .populate("leadUserId", "fullName mobileNumber affiliateCode profileImage")
       .sort({ createdAt: -1 });
 
-    res.json(leads);
+    return res.status(200).json({ leads });
   } catch (err) {
-    res.status(500).json({ message: "Failed to fetch leads" });
+    console.error("❌ Error fetching affiliate leads:", err);
+    return res.status(500).json({ message: "Failed to fetch leads" });
   }
 };
+
+
+
 
 // ✅ Delete Lead
 exports.deleteLeadById = async (req, res) => {
   try {
+    const leadId = req.params.id;
+
+    if (!Types.ObjectId.isValid(leadId)) {
+      return res.status(400).json({ message: "Invalid lead ID" });
+    }
+
     const lead = await Leads.findOneAndDelete({
-      _id: req.params.id,
+      _id: leadId,
       referralId: req.user._id,
     });
 
@@ -307,9 +432,10 @@ exports.deleteLeadById = async (req, res) => {
       return res.status(404).json({ message: "Lead not found or unauthorized" });
     }
 
-    res.json({ message: "Lead deleted successfully" });
+    return res.status(200).json({ message: "Lead deleted successfully" });
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    console.error("❌ Error deleting lead:", err);
+    return res.status(500).json({ message: "Server error while deleting lead" });
   }
 };
 
@@ -330,16 +456,27 @@ exports.getAffiliateCommissions = async (req, res) => {
 // ✅ Request Payout
 exports.requestPayout = async (req, res) => {
   try {
-    const { amount, commissionId } = req.body;
+    const amount = parseFloat(sanitizeHtml(req.body.amount?.toString() || ""));
+    const commissionId = sanitizeHtml(req.body.commissionId?.toString() || "");
+
+    // ✅ Basic validations
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ message: "Amount must be greater than 0" });
+    }
+    if (!commissionId || !Types.ObjectId.isValid(commissionId)) {
+      return res.status(400).json({ message: "Invalid commission ID" });
+    }
+
     const payout = await Payout.create({
       userId: req.user._id,
       amount,
       commissionId,
     });
 
-    res.status(201).json({ message: "Payout requested", payout });
+    return res.status(201).json({ message: "Payout requested", payout });
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    console.error("❌ Payout request error:", err);
+    return res.status(500).json({ message: "Failed to request payout" });
   }
 };
 
@@ -347,13 +484,20 @@ exports.requestPayout = async (req, res) => {
 exports.getIndustryEarnings = async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select("industryEarnings");
-    if (!user) return res.status(404).json({ message: "User not found" });
 
-    res.json(user.industryEarnings);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.status(200).json({
+      industryEarnings: user.industryEarnings || [],
+    });
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    console.error("❌ Error fetching industry earnings:", err);
+    return res.status(500).json({ message: "Server error while fetching industry earnings" });
   }
 };
+
 
 // ✅ Update Industry Earnings (Admin only)
 exports.updateIndustryEarnings = async (req, res) => {
@@ -361,28 +505,51 @@ exports.updateIndustryEarnings = async (req, res) => {
     const { userId } = req.params;
     const { industryEarnings } = req.body;
 
+    if (!Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+
+    if (!Array.isArray(industryEarnings)) {
+      return res.status(400).json({ message: "industryEarnings must be an array" });
+    }
+
+    // Optional: You can validate each item in array here if needed
+    // Example: check for required fields like label, initialAmount, currentTotal
+
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
     user.industryEarnings = industryEarnings;
     await user.save();
 
-    res.status(200).json({ message: "Industry earnings updated", industryEarnings });
+    return res.status(200).json({
+      message: "Industry earnings updated successfully",
+      industryEarnings: user.industryEarnings,
+    });
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    console.error("❌ Error updating industry earnings:", err);
+    return res.status(500).json({ message: "Server error while updating earnings" });
   }
 };
 
 exports.getSalesStats = async (req, res) => {
   try {
-    const filterType = req.query.type || "daily";
-    const user = await User.findById(req.user._id);
-    const commissions = await Commissions.find({ userId: req.user._id }).populate("bundleCourseId");
+    const allowedTypes = ["daily", "weekly", "monthly"];
+    const filterType = allowedTypes.includes(req.query.type) ? req.query.type : "daily";
+
+    const user = await User.findById(req.user._id).select("_id");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const commissions = await Commissions.find({ userId: user._id })
+      .populate("bundleCourseId", "title")
+      .lean();
 
     const pieMap = {};
     const barMap = {};
 
-    commissions.forEach(c => {
+    commissions.forEach((c) => {
       const created = new Date(c.createdAt);
       let label;
 
@@ -401,8 +568,8 @@ exports.getSalesStats = async (req, res) => {
       barMap[label] = (barMap[label] || 0) + c.amount;
     });
 
-    // Create last 7 date/week/month labels
-    let barData = [];
+    // ✅ Build barData with last 7 points
+    const barData = [];
     const today = new Date();
 
     if (filterType === "daily") {
@@ -412,18 +579,14 @@ exports.getSalesStats = async (req, res) => {
         const label = day.toLocaleDateString("en-IN");
         barData.push({ name: label, earnings: barMap[label] || 0 });
       }
-    }
-
-    if (filterType === "weekly") {
+    } else if (filterType === "weekly") {
       for (let i = 6; i >= 0; i--) {
         const week = new Date(today);
         week.setDate(today.getDate() - i * 7);
         const label = `Week of ${week.toLocaleDateString("en-IN")}`;
         barData.push({ name: label, earnings: barMap[label] || 0 });
       }
-    }
-
-    if (filterType === "monthly") {
+    } else if (filterType === "monthly") {
       for (let i = 6; i >= 0; i--) {
         const month = new Date(today.getFullYear(), today.getMonth() - i, 1);
         const label = month.toLocaleString("default", { month: "short", year: "numeric" });
@@ -432,25 +595,34 @@ exports.getSalesStats = async (req, res) => {
     }
 
     const pieData = Object.entries(pieMap).map(([name, value]) => ({ name, value }));
-    res.json({ pieData, barData });
+
+    return res.status(200).json({ pieData, barData });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to generate sales stats" });
+    console.error("❌ Sales stats error:", err);
+    return res.status(500).json({ message: "Failed to generate sales stats" });
   }
 };
-
 
 
 exports.getTopIncomeLeads = async (req, res) => {
   try {
     // 1. Find users referred by current user
-    const referredUsers = await User.find({ sponsorCode: req.user.affiliateCode });
+    const referredUsers = await User.find({ sponsorCode: req.user.affiliateCode }).select("_id");
     const referredIds = referredUsers.map(u => u._id);
 
-    // 2. Aggregate commissions earned by each referred user
+    if (!referredIds.length) {
+      return res.status(200).json([]); // No referrals yet
+    }
+
+    // 2. Aggregate commissions of referred users
     const earnings = await Commissions.aggregate([
-      { $match: { user: { $in: referredIds } } },
-      { $group: { _id: "$user", total: { $sum: "$amount" } } },
+      { $match: { userId: { $in: referredIds } } },
+      {
+        $group: {
+          _id: "$userId",
+          total: { $sum: "$amount" },
+        }
+      },
       { $sort: { total: -1 } },
       { $limit: 5 },
       {
@@ -471,20 +643,25 @@ exports.getTopIncomeLeads = async (req, res) => {
       }
     ]);
 
-    res.status(200).json(earnings);
+    return res.status(200).json(earnings);
   } catch (error) {
-    console.error("Top income leads error:", error);
-    res.status(500).json({ message: "Server error while fetching top income leads" });
+    console.error(`❌ Top income leads error for ${req.user.affiliateCode}:`, error);
+    return res.status(500).json({ message: "Server error while fetching top income leads" });
   }
 };
+
 
 // admin
 // userController.js ke loginUser method me thoda change:
 exports.loginAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email });
 
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required" });
+    }
+
+    const user = await User.findOne({ email });
     if (!user || !(await user.matchPassword(password))) {
       return res.status(401).json({ message: "Invalid email or password" });
     }
@@ -503,27 +680,46 @@ exports.loginAdmin = async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    res.status(200).json({ message: "Admin login successful", user });
+    return res.status(200).json({
+      message: "Admin login successful",
+      user: {
+        _id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        role: user.role,
+      },
+    });
   } catch (err) {
-    res.status(500).json({ message: "Something went wrong" });
+    console.error("❌ Admin login error:", err);
+    return res.status(500).json({ message: "Something went wrong during admin login" });
   }
 };
+
 
 // GET /api/user/payouts
 exports.getUserPayouts = async (req, res) => {
   try {
+    if (!Types.ObjectId.isValid(req.user._id)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+
     const payouts = await Payout.find({ userId: req.user._id }).sort({ createdAt: -1 });
-    res.status(200).json(payouts);
+
+    return res.status(200).json(payouts || []);
   } catch (error) {
-    console.error("❌ getUserPayouts error:", error);
-    res.status(500).json({ message: "Failed to fetch payouts" });
+    console.error(`❌ getUserPayouts error for user ${req.user._id}:`, error);
+    return res.status(500).json({ message: "Failed to fetch payouts" });
   }
 };
 
 // GET /api/user/commission-summary
 exports.getCommissionSummary = async (req, res) => {
   try {
-    const [paid, unpaid, pending, processing] = await Promise.all([
+    if (!Types.ObjectId.isValid(req.user._id)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+
+    const [paid, unpaid, pending, approved] = await Promise.all([
       Commissions.aggregate([
         { $match: { userId: req.user._id, status: "paid" } },
         { $group: { _id: null, total: { $sum: "$amount" } } },
@@ -542,26 +738,26 @@ exports.getCommissionSummary = async (req, res) => {
       ]),
     ]);
 
-    res.status(200).json({
+    return res.status(200).json({
       paid: paid[0]?.total || 0,
       unpaid: unpaid[0]?.total || 0,
       pending: pending[0]?.total || 0,
-      processing: processing[0]?.total || 0,
-
+      processing: approved[0]?.total || 0,
     });
   } catch (error) {
     console.error("❌ getCommissionSummary error:", error);
-    res.status(500).json({ message: "Failed to fetch commission summary" });
+    return res.status(500).json({ message: "Failed to fetch commission summary" });
   }
 };
 
 // GET /api/user/leaderboard?type=daily|weekly|monthly|all
 exports.getLeaderboard = async (req, res) => {
   try {
-    const type = req.query.type || "all";
+    const allowedTypes = ["daily", "weekly", "monthly", "all"];
+    const type = allowedTypes.includes(req.query.type) ? req.query.type : "all";
 
-    let dateFilter = {};
     const now = new Date();
+    let dateFilter = {};
 
     if (type === "daily") {
       const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -605,10 +801,10 @@ exports.getLeaderboard = async (req, res) => {
       },
     ]);
 
-    res.status(200).json(leaderboard);
+    return res.status(200).json(leaderboard);
   } catch (err) {
-    console.error("❌ Leaderboard error:", err);
-    res.status(500).json({ message: "Failed to fetch leaderboard" });
+    console.error(`❌ Leaderboard fetch error [type=${req.query.type}]:`, err);
+    return res.status(500).json({ message: "Failed to fetch leaderboard" });
   }
 };
 
@@ -616,64 +812,109 @@ exports.getLeaderboard = async (req, res) => {
 exports.forgotPassword = async (req, res) => {
   const { email } = req.body;
 
+  if (!email || !email.includes("@") || typeof email !== "string") {
+    return res.status(400).json({ message: "Please enter a valid email address." });
+  }
+
   try {
     const user = await User.findOne({ email });
-    if (!user)
-      return res.status(404).json({ message: "User not found with this email" });
+    if (!user) {
+      return res.status(404).json({ message: "No account found with this email." });
+    }
 
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
+    const hashedOtp = await bcrypt.hash(otpCode, 10);
     user.otp = {
-      code: otpCode,
+      code: hashedOtp,
       expiresAt: otpExpiry,
     };
 
     await user.save();
 
-    await sendOtpEmail({ to: email, otp: otpCode, name: user.fullName });
+    try {
+      await sendOtpEmail({
+        to: email,
+        otp: otpCode,
+        name: user.fullName,
+      });
+    } catch (mailErr) {
+      console.error("❌ Failed to send OTP email:", mailErr.message);
+      return res.status(500).json({ message: "OTP could not be sent. Please try again later." });
+    }
 
-    res.status(200).json({ message: "OTP sent to your email" });
+    return res.status(200).json({ message: "OTP sent to your email" });
   } catch (err) {
-    console.error(" Error in forgotPassword:", err.message);
-    res.status(500).json({ message: "Server error" });
+    console.error("❌ Error in forgotPassword:", err);
+    return res.status(500).json({ message: "Server error" });
   }
 };
+
 // OTP Verification 
 exports.verifyOtp = async (req, res) => {
   const { email, otp } = req.body;
 
+  // Basic input validation
+  if (!email || typeof email !== "string" || !email.includes("@")) {
+    return res.status(400).json({ message: "Valid email is required." });
+  }
+
+  if (!otp || typeof otp !== "string" || otp.length !== 6) {
+    return res.status(400).json({ message: "OTP must be a 6-digit string." });
+  }
+
   try {
     const user = await User.findOne({ email });
 
-    if (!user || !user.otp || user.otp.code !== otp) {
+    if (!user || !user.otp || !user.otp.code) {
       return res.status(400).json({ message: "Invalid or expired OTP" });
     }
 
-    if (user.otp.expiresAt < new Date()) {
+    // Check OTP expiry
+    if (new Date(user.otp.expiresAt) < new Date()) {
       return res.status(400).json({ message: "OTP expired" });
     }
 
-    // Mark OTP as used or clear it
+    // ✅ Compare hashed OTP
+    const isMatch = await bcrypt.compare(otp, user.otp.code);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid or expired OTP" });
+    }
+
+    // ✅ Clear OTP after success
     user.otp = undefined;
     await user.save();
 
     res.status(200).json({ message: "OTP verified successfully" });
   } catch (err) {
-    console.error(" Error in verifyOtp:", err.message);
-    res.status(500).json({ message: "Server error" });
+    console.error("❌ Error in verifyOtp:", err.message);
+    res.status(500).json({ message: "Server error while verifying OTP" });
   }
 };
+
 
 // Reset Password
 exports.resetPassword = async (req, res) => {
   const { email, newPassword } = req.body;
 
+  if (!email || typeof email !== "string" || !email.includes("@")) {
+    return res.status(400).json({ message: "Valid email is required" });
+  }
+
+  if (!newPassword || typeof newPassword !== "string" || newPassword.length < 6) {
+    return res.status(400).json({ message: "Password must be at least 6 characters" });
+  }
+
   try {
     const user = await User.findOne({ email });
-    if (!user)
+    if (!user) {
       return res.status(404).json({ message: "User not found" });
+    }
 
+    // Optional (Recommended): ensure OTP was verified before allowing password reset
+    if (user.otp?.code) {
+      return res.status(400).json({ message: "OTP verification required before resetting password" });
+    }
 
     user.password = newPassword;
     await user.save();
@@ -690,11 +931,12 @@ exports.getAllPublishedTrainings = async (req, res) => {
   try {
     const trainings = await Training.find({ status: "published" })
       .select("title slug thumbnail type")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean(); // Optimize for read-only
 
-    res.status(200).json(trainings);
+    res.status(200).json(trainings || []);
   } catch (err) {
-    console.error("❌ Error fetching trainings:", err);
+    console.error("❌ Error fetching trainings:", err.message);
     res.status(500).json({ message: "Failed to fetch trainings" });
   }
 };

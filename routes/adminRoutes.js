@@ -24,7 +24,8 @@ const {
      getAllUserSummaries, 
      loginAsUser,
      getPendingKycs,
-     updateKycStatus
+     updateKycStatus,
+     bulkRegisterAndEnrollWithRelations
 } = require("../controllers/adminController");
 
 // 🔐 Get complete user info (admin only)
@@ -60,6 +61,14 @@ router.post(
   uploadTrainingThumbnail.single("thumbnail"),
   createTraining
 );
+
+router.post(
+  "/bulk-register-paid-users",
+  protect,
+  authorizeRoles("admin"),
+  bulkRegisterAndEnrollWithRelations
+);
+
 
 
 module.exports = router;

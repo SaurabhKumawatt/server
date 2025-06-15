@@ -659,18 +659,18 @@ exports.getPendingKycs = async (req, res) => {
         ...user,
         kycDetails: kyc
           ? {
-            accountHolderName: kyc.accountHolderName || "",
-            accountNumber: decrypt(kyc.accountNumber) || "",
-            ifscCode: kyc.ifscCode || "",
-            upiId: decrypt(kyc.upiId) || "",
-            aadhaarNumber: decrypt(kyc.aadhaarNumber) || "",
-            panCard: decrypt(kyc.panCard) || "",
-            aadharFrontImage: kyc.aadhaarFrontImage || "",
-            aadharBackImage: kyc.aadhaarBackImage || "",
-            panProofImage: kyc.panProofImage || "",
-            status: kyc.kycStatus || "pending",
-            rejectReason: kyc.rejectionReason || "",
-          }
+              accountHolderName: kyc.accountHolderName || "",
+              accountNumber: kyc.accountNumber ? decrypt(kyc.accountNumber) : "",
+              ifscCode: kyc.ifscCode || "",
+              upiId: kyc.upiId ? decrypt(kyc.upiId) : "",
+              aadhaarNumber: kyc.aadhaarNumber ? decrypt(kyc.aadhaarNumber) : "",
+              panCard: kyc.panCard ? decrypt(kyc.panCard) : "",
+              aadharFrontImage: kyc.aadhaarFrontImage || "",
+              aadharBackImage: kyc.aadhaarBackImage || "",
+              panProofImage: kyc.panProofImage || "",
+              status: kyc.kycStatus || "pending",
+              rejectReason: kyc.rejectionReason || "",
+            }
           : {},
       };
     });
@@ -681,6 +681,7 @@ exports.getPendingKycs = async (req, res) => {
     res.status(500).json({ message: "Error fetching KYC data" });
   }
 };
+
 
 
 // adminController.js

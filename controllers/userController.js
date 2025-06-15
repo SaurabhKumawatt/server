@@ -329,17 +329,21 @@ exports.getKycStatus = async (req, res) => {
     ]);
 
     if (!user) {
+      console.log("❌ User not found:", userId);
       return res.status(404).json({ message: "User not found" });
     }
 
-    // 🔓 Decrypt sensitive fields if KYC exists
+    if (!kycRaw) {
+      console.log("⚠️ No KYC record found for:", userId);
+    }
+
     const kyc = kycRaw
       ? {
           ...kycRaw,
-          accountNumber: decrypt(kycRaw.accountNumber),
-          aadhaarNumber: decrypt(kycRaw.aadhaarNumber),
-          panCard: decrypt(kycRaw.panCard),
-          upiId: decrypt(kycRaw.upiId),
+          accountNumber: kycRaw.accountNumber ? decrypt(kycRaw.accountNumber) : "",
+          aadhaarNumber: kycRaw.aadhaarNumber ? decrypt(kycRaw.aadhaarNumber) : "",
+          panCard: kycRaw.panCard ? decrypt(kycRaw.panCard) : "",
+          upiId: kycRaw.upiId ? decrypt(kycRaw.upiId) : "",
         }
       : null;
 
@@ -360,40 +364,104 @@ exports.submitKycDetails = async (req, res) => {
   try {
     const userId = req.user._id;
 
+    // 🔍 Check for duplicate KYC
     const existing = await UserKyc.findOne({ userId });
     if (existing) {
       return res.status(400).json({ message: "KYC already submitted" });
     }
 
-    // 🧼 Sanitize + 🔐 Encrypt
-    const cleanData = {
-      userId,
-      accountHolderName: sanitizeHtml(req.body.accountHolderName?.trim() || ""),
-      accountNumber: encrypt(sanitizeHtml(req.body.accountNumber?.trim() || "")),
-      bankName: sanitizeHtml(req.body.bankName?.trim() || ""),
-      ifscCode: sanitizeHtml(req.body.ifscCode?.trim() || ""),
-      branch: sanitizeHtml(req.body.branch?.trim() || ""),
-      upiId: encrypt(sanitizeHtml(req.body.upiId?.trim() || "")),
-      aadhaarNumber: encrypt(sanitizeHtml(req.body.aadhaarNumber?.trim() || "")),
-      panCard: encrypt(sanitizeHtml(req.body.panCard?.trim() || "")),
-      aadhaarFrontImage: req.files?.aadhaarFrontImage?.[0]?.path || null,
-      aadhaarBackImage: req.files?.aadhaarBackImage?.[0]?.path || null,
-      panProofImage: req.files?.panProofImage?.[0]?.path || null,
-    };
+    // ✅ Validate file uploads
+    const aadhaarFront = req.files?.aadhaarFrontImage?.[0];
+    const aadhaarBack = req.files?.aadhaarBackImage?.[0];
+    const panProof = req.files?.panProofImage?.[0];
 
-    // ✅ Check file uploads
-    if (!cleanData.aadhaarFrontImage || !cleanData.aadhaarBackImage || !cleanData.panProofImage) {
+    if (!aadhaarFront || !aadhaarBack || !panProof) {
       return res.status(400).json({ message: "All 3 document images are required" });
     }
 
-    const kyc = await UserKyc.create(cleanData);
+    // 🧼 Sanitize raw inputs
+    const accountHolderName = sanitizeHtml(req.body.accountHolderName?.trim() || "");
+    const accountNumber = sanitizeHtml(req.body.accountNumber?.trim() || "");
+    const bankName = sanitizeHtml(req.body.bankName?.trim() || "");
+    const ifscCode = sanitizeHtml(req.body.ifscCode?.trim()?.toUpperCase() || "");
+    const branch = sanitizeHtml(req.body.branch?.trim() || "");
+    const upiId = req.body.upiId ? sanitizeHtml(req.body.upiId?.trim()) : null;
+    const aadhaarNumber = sanitizeHtml(req.body.aadhaarNumber?.trim() || "");
+    const panCard = sanitizeHtml(req.body.panCard?.trim()?.toUpperCase() || "");
 
-    res.status(201).json({ message: "KYC submitted successfully", kyc });
+    // 🔍 Manual validations
+    if (!/^[a-zA-Z\s]{3,}$/.test(accountHolderName)) {
+      return res.status(400).json({ message: "Invalid account holder name" });
+    }
+
+    if (accountNumber.length < 6 || accountNumber.length > 20) {
+      return res.status(400).json({ message: "Account number must be 6 to 20 digits" });
+    }
+
+    if (!/^[a-zA-Z\s]{3,}$/.test(bankName)) {
+      return res.status(400).json({ message: "Invalid bank name" });
+    }
+
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifscCode)) {
+      return res.status(400).json({ message: "Invalid IFSC code" });
+    }
+
+    if (branch.length < 3) {
+      return res.status(400).json({ message: "Branch name must be at least 3 characters" });
+    }
+
+    if (upiId && !/^[\w.-]+@[\w]+$/.test(upiId)) {
+      return res.status(400).json({ message: "Invalid UPI ID" });
+    }
+
+    if (!/^\d{12}$/.test(aadhaarNumber)) {
+      return res.status(400).json({ message: "Aadhaar number must be 12 digits" });
+    }
+
+    if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(panCard)) {
+      return res.status(400).json({ message: "Invalid PAN number format" });
+    }
+
+    // 🔐 Encrypt after validation
+    const cleanData = {
+      userId,
+      accountHolderName,
+      accountNumber: encrypt(accountNumber),
+      bankName,
+      ifscCode,
+      branch,
+      upiId: upiId ? encrypt(upiId) : null,
+      aadhaarNumber: encrypt(aadhaarNumber),
+      panCard: encrypt(panCard),
+      aadhaarFrontImage: aadhaarFront.path,
+      aadhaarBackImage: aadhaarBack.path,
+      panProofImage: panProof.path,
+    };
+
+    // 🚀 Create KYC document
+    try {
+      const kyc = await UserKyc.create(cleanData);
+      return res.status(201).json({ message: "KYC submitted successfully", kyc });
+    } catch (validationErr) {
+      if (validationErr.name === "ValidationError") {
+        const messages = Object.values(validationErr.errors).map(e => e.message);
+        return res.status(400).json({ message: messages.join(", ") });
+      }
+
+      if (validationErr.code === 11000) {
+        const field = Object.keys(validationErr.keyValue)[0];
+        return res.status(409).json({ message: `${field} already exists` });
+      }
+
+      throw validationErr;
+    }
+
   } catch (err) {
-    console.error("❌ KYC submission error:", err.message);
-    res.status(500).json({ message: "Failed to submit KYC" });
+    console.error("❌ KYC submission error:", err.message || err);
+    return res.status(500).json({ message: "Failed to submit KYC" });
   }
 };
+
 
 // ✅ Get Leads
 exports.getAffiliateLeads = async (req, res) => {

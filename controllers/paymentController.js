@@ -71,6 +71,11 @@ exports.verifyPayment = async (req, res) => {
     const data = parsed.payload.payment.entity;
     const { id, order_id, status, currency, method } = data;
 
+    if (status !== "captured") {
+      console.log("❌ Payment not captured, skipping enrollment. Status:", status);
+      return res.status(200).json({ message: "Payment not captured, no action taken" });
+    }
+
     const alreadyProcessed = await Payment.findOne({ razorpayPaymentId: id });
     if (alreadyProcessed) {
       return res.status(200).json({ message: "Already processed" });

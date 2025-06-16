@@ -215,8 +215,7 @@ exports.getLoggedInUserProfile = async (req, res) => {
     const user = await User.findById(req.user._id)
       .select("-password")
       .populate("enrolledCourses.course", "title price isBundle");
-    console.log(user);
-    
+
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -339,12 +338,12 @@ exports.getKycStatus = async (req, res) => {
 
     const kyc = kycRaw
       ? {
-          ...kycRaw,
-          accountNumber: kycRaw.accountNumber ? decrypt(kycRaw.accountNumber) : "",
-          aadhaarNumber: kycRaw.aadhaarNumber ? decrypt(kycRaw.aadhaarNumber) : "",
-          panCard: kycRaw.panCard ? decrypt(kycRaw.panCard) : "",
-          upiId: kycRaw.upiId ? decrypt(kycRaw.upiId) : "",
-        }
+        ...kycRaw,
+        accountNumber: kycRaw.accountNumber ? decrypt(kycRaw.accountNumber) : "",
+        aadhaarNumber: kycRaw.aadhaarNumber ? decrypt(kycRaw.aadhaarNumber) : "",
+        panCard: kycRaw.panCard ? decrypt(kycRaw.panCard) : "",
+        upiId: kycRaw.upiId ? decrypt(kycRaw.upiId) : "",
+      }
       : null;
 
     return res.status(200).json({
@@ -369,12 +368,24 @@ exports.submitKycDetails = async (req, res) => {
     if (existing) {
       return res.status(400).json({ message: "KYC already submitted" });
     }
+    // 🔐 File size validation (max 5MB each)
+    const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+
 
     // ✅ Validate file uploads
     const aadhaarFront = req.files?.aadhaarFrontImage?.[0];
     const aadhaarBack = req.files?.aadhaarBackImage?.[0];
     const panProof = req.files?.panProofImage?.[0];
 
+    if (aadhaarFront.size > maxSize) {
+      return res.status(400).json({ message: "Aadhaar front image is too large (max 5MB)" });
+    }
+    if (aadhaarBack.size > maxSize) {
+      return res.status(400).json({ message: "Aadhaar back image is too large (max 5MB)" });
+    }
+    if (panProof.size > maxSize) {
+      return res.status(400).json({ message: "PAN card image is too large (max 5MB)" });
+    }
     if (!aadhaarFront || !aadhaarBack || !panProof) {
       return res.status(400).json({ message: "All 3 document images are required" });
     }

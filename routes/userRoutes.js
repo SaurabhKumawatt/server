@@ -28,7 +28,9 @@ const {
   getUserPayouts,
   getCommissionSummary,
   getLeaderboard,
-  getAllPublishedTrainings
+  getAllPublishedTrainings,
+  adminSearchUser,
+  updateKycDetails
 } = require("../controllers/userController");
 
 // 🔐 Middlewares
@@ -119,9 +121,22 @@ router.post(
     { name: "aadhaarFrontImage", maxCount: 1 },
     { name: "aadhaarBackImage", maxCount: 1 },
     { name: "panProofImage", maxCount: 1 },
+    { name: "bankProofDoc", maxCount: 1 },
   ]),
   submitKycDetails
 );
+router.patch(
+  "/submit-kyc",
+  protect,
+  uploadTo("kyc-docs").fields([
+    { name: "aadhaarFrontImage", maxCount: 1 },
+    { name: "aadhaarBackImage", maxCount: 1 },
+    { name: "panProofImage", maxCount: 1 },
+    { name: "bankProofDoc", maxCount: 1 },
+  ]),
+  updateKycDetails  // 🔁 new controller to update instead of create
+);
+
 
 
 // ==============================
@@ -161,5 +176,8 @@ router.patch(
   ],
   updateIndustryEarnings
 );
+router.get("/admin-search", protect, authorizeRoles("admin"), adminSearchUser);
+
+
 
 module.exports = router;

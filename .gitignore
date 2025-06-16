@@ -4,6 +4,7 @@
 # build
 /dist
 /build
+/uploads
 
 # environment variables
 .env

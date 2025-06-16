@@ -101,11 +101,13 @@ const userSchema = new mongoose.Schema(
       min: [0, "Commission percent must be at least 0"],
       max: [100, "Commission percent cannot exceed 100"],
     },
-    kycStatus: {
+
+     kycStatus: {
       type: String,
-      enum: ["pending", "approved", "rejected"],
-      default: "pending",
+      enum: ["not-submitted","pending", "approved", "rejected"],
+      default: "not-submitted",
     },
+
     joinedAt: {
       type: Date,
       default: Date.now,

@@ -323,9 +323,10 @@ exports.getKycStatus = async (req, res) => {
     const userId = req.user._id;
 
     const [user, kycRaw] = await Promise.all([
-      User.findById(userId).select("kycStatus kycReason"),
+      User.findById(userId).select("kycStatus"),
       UserKyc.findOne({ userId }).lean(),
     ]);
+    console.log("🧾 KYC REJECTION REASON:", kycRaw?.rejectionReason);
 
     if (!user) {
       console.log("❌ User not found:", userId);
@@ -348,7 +349,7 @@ exports.getKycStatus = async (req, res) => {
 
     return res.status(200).json({
       status: user.kycStatus || "not-submitted",
-      reason: user.kycReason || null,
+      reason: kycRaw?.rejectionReason || null,
       kyc,
     });
   } catch (err) {
@@ -376,6 +377,7 @@ exports.submitKycDetails = async (req, res) => {
     const aadhaarFront = req.files?.aadhaarFrontImage?.[0];
     const aadhaarBack = req.files?.aadhaarBackImage?.[0];
     const panProof = req.files?.panProofImage?.[0];
+    const bankProof = req.files?.bankProofDoc?.[0];
 
     if (aadhaarFront.size > maxSize) {
       return res.status(400).json({ message: "Aadhaar front image is too large (max 5MB)" });
@@ -386,8 +388,11 @@ exports.submitKycDetails = async (req, res) => {
     if (panProof.size > maxSize) {
       return res.status(400).json({ message: "PAN card image is too large (max 5MB)" });
     }
-    if (!aadhaarFront || !aadhaarBack || !panProof) {
-      return res.status(400).json({ message: "All 3 document images are required" });
+    if (bankProof.size > maxSize) {
+      return res.status(400).json({ message: "Bank Proof image is too large (max 5MB)" });
+    }
+    if (!aadhaarFront || !aadhaarBack || !panProof || !bankProof) {
+      return res.status(400).json({ message: "All 4 document images are required" });
     }
 
     // 🧼 Sanitize raw inputs
@@ -447,11 +452,15 @@ exports.submitKycDetails = async (req, res) => {
       aadhaarFrontImage: aadhaarFront.path,
       aadhaarBackImage: aadhaarBack.path,
       panProofImage: panProof.path,
+      bankProofDoc: bankProof.path,
     };
 
     // 🚀 Create KYC document
     try {
       const kyc = await UserKyc.create(cleanData);
+
+      await User.findByIdAndUpdate(userId, { kycStatus: "pending" });
+
       return res.status(201).json({ message: "KYC submitted successfully", kyc });
     } catch (validationErr) {
       if (validationErr.name === "ValidationError") {
@@ -470,6 +479,103 @@ exports.submitKycDetails = async (req, res) => {
   } catch (err) {
     console.error("❌ KYC submission error:", err.message || err);
     return res.status(500).json({ message: "Failed to submit KYC" });
+  }
+};
+
+exports.updateKycDetails = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const existing = await UserKyc.findOne({ userId });
+    if (!existing) {
+      return res.status(404).json({ message: "No KYC record found to update" });
+    }
+
+    const maxSize = 5 * 1024 * 1024;
+
+    const aadhaarFront = req.files?.aadhaarFrontImage?.[0];
+    const aadhaarBack = req.files?.aadhaarBackImage?.[0];
+    const panProof = req.files?.panProofImage?.[0];
+    const bankProof = req.files?.bankProofDoc?.[0];
+
+    if (!aadhaarFront || !aadhaarBack || !panProof || !bankProof) {
+      return res.status(400).json({ message: "All 4 document images are required" });
+    }
+
+    if (aadhaarFront.size > maxSize) {
+      return res.status(400).json({ message: "Aadhaar front image is too large (max 5MB)" });
+    }
+    if (aadhaarBack.size > maxSize) {
+      return res.status(400).json({ message: "Aadhaar back image is too large (max 5MB)" });
+    }
+    if (panProof.size > maxSize) {
+      return res.status(400).json({ message: "PAN card image is too large (max 5MB)" });
+    }
+    if (bankProof.size > maxSize) {
+      return res.status(400).json({ message: "Bank Proof image is too large (max 5MB)" });
+    }
+
+    const accountHolderName = sanitizeHtml(req.body.accountHolderName?.trim() || "");
+    const accountNumber = sanitizeHtml(req.body.accountNumber?.trim() || "");
+    const bankName = sanitizeHtml(req.body.bankName?.trim() || "");
+    const ifscCode = sanitizeHtml(req.body.ifscCode?.trim()?.toUpperCase() || "");
+    const branch = sanitizeHtml(req.body.branch?.trim() || "");
+    const upiId = req.body.upiId ? sanitizeHtml(req.body.upiId?.trim()) : null;
+    const aadhaarNumber = sanitizeHtml(req.body.aadhaarNumber?.trim() || "");
+    const panCard = sanitizeHtml(req.body.panCard?.trim()?.toUpperCase() || "");
+
+    // 🛡️ Manual validations (same as in submitKycDetails)
+    if (!/^[a-zA-Z\s]{3,}$/.test(accountHolderName)) {
+      return res.status(400).json({ message: "Invalid account holder name" });
+    }
+    if (accountNumber.length < 6 || accountNumber.length > 20) {
+      return res.status(400).json({ message: "Account number must be 6 to 20 digits" });
+    }
+    if (!/^[a-zA-Z\s]{3,}$/.test(bankName)) {
+      return res.status(400).json({ message: "Invalid bank name" });
+    }
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifscCode)) {
+      return res.status(400).json({ message: "Invalid IFSC code" });
+    }
+    if (branch.length < 3) {
+      return res.status(400).json({ message: "Branch name must be at least 3 characters" });
+    }
+    if (upiId && !/^[\w.-]+@[\w]+$/.test(upiId)) {
+      return res.status(400).json({ message: "Invalid UPI ID" });
+    }
+    if (!/^\d{12}$/.test(aadhaarNumber)) {
+      return res.status(400).json({ message: "Aadhaar number must be 12 digits" });
+    }
+    if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(panCard)) {
+      return res.status(400).json({ message: "Invalid PAN number format" });
+    }
+
+    const updateData = {
+      accountHolderName,
+      accountNumber: encrypt(accountNumber),
+      bankName,
+      ifscCode,
+      branch,
+      upiId: upiId ? encrypt(upiId) : null,
+      aadhaarNumber: encrypt(aadhaarNumber),
+      panCard: encrypt(panCard),
+      aadhaarFrontImage: aadhaarFront.path,
+      aadhaarBackImage: aadhaarBack.path,
+      panProofImage: panProof.path,
+      bankProofDoc: bankProof.path,
+      kycStatus: "pending",
+      rejectionReason: null,
+      updatedAt: new Date(),
+    };
+
+    const updatedKyc = await UserKyc.findOneAndUpdate({ userId }, updateData, { new: true });
+
+    await User.findByIdAndUpdate(userId, { kycStatus: "pending" });
+
+    return res.status(200).json({ message: "KYC resubmitted successfully", kyc: updatedKyc });
+  } catch (err) {
+    console.error("❌ KYC update error:", err.message);
+    return res.status(500).json({ message: "Failed to update KYC" });
   }
 };
 
@@ -833,25 +939,59 @@ exports.getCommissionSummary = async (req, res) => {
 // GET /api/user/leaderboard?type=daily|weekly|monthly|all
 exports.getLeaderboard = async (req, res) => {
   try {
-    const allowedTypes = ["daily", "weekly", "monthly", "all"];
+    const allowedTypes = ["daily", "weekly", "monthly", "yearly", "all", "industry"];
     const type = allowedTypes.includes(req.query.type) ? req.query.type : "all";
+    const userId = req.user._id;
 
     const now = new Date();
     let dateFilter = {};
 
+    // ⏳ Date Filters
     if (type === "daily") {
-      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      dateFilter.createdAt = { $gte: startOfDay };
+      dateFilter.createdAt = { $gte: new Date(now.getFullYear(), now.getMonth(), now.getDate()) };
     } else if (type === "weekly") {
       const sevenDaysAgo = new Date(now);
       sevenDaysAgo.setDate(now.getDate() - 7);
       dateFilter.createdAt = { $gte: sevenDaysAgo };
     } else if (type === "monthly") {
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      dateFilter.createdAt = { $gte: startOfMonth };
+      dateFilter.createdAt = { $gte: new Date(now.getFullYear(), now.getMonth(), 1) };
+    } else if (type === "yearly") {
+      dateFilter.createdAt = { $gte: new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()) };
     }
 
-    const leaderboard = await Commissions.aggregate([
+    // 🧠 Industry Rank
+    if (type === "industry") {
+      const all = await User.aggregate([
+        {
+          $addFields: {
+            totalIndustryEarnings: { $sum: "$industryEarnings.currentTotal" },
+          },
+        },
+        { $sort: { totalIndustryEarnings: -1 } },
+        {
+          $project: {
+            fullName: 1,
+            profileImage: 1,
+            totalEarnings: "$totalIndustryEarnings",
+            _id: 1,
+          },
+        },
+      ]);
+
+      const top10 = all.slice(0, 10);
+      const myIndex = all.findIndex((u) => u._id.toString() === userId.toString());
+
+      return res.status(200).json({
+        leaderboard: top10,
+        myRank: {
+          rank: myIndex >= 0 ? myIndex + 1 : null,
+          totalEarnings: all[myIndex]?.totalEarnings || 0,
+        },
+      });
+    }
+
+    // 🧠 Commissions Rank
+    const all = await Commissions.aggregate([
       {
         $match: type === "all" ? {} : dateFilter,
       },
@@ -862,31 +1002,37 @@ exports.getLeaderboard = async (req, res) => {
         },
       },
       { $sort: { totalEarnings: -1 } },
-      { $limit: 10 },
-      {
-        $lookup: {
-          from: "users",
-          localField: "_id",
-          foreignField: "_id",
-          as: "user",
-        },
-      },
-      { $unwind: "$user" },
-      {
-        $project: {
-          fullName: "$user.fullName",
-          profileImage: "$user.profileImage",
-          totalEarnings: 1,
-        },
-      },
     ]);
 
-    return res.status(200).json(leaderboard);
+    const top10Ids = all.slice(0, 10).map((u) => u._id);
+    const top10Users = await User.find({ _id: { $in: top10Ids } })
+      .select("fullName profileImage")
+      .lean();
+
+    const leaderboard = all.slice(0, 10).map((entry) => {
+      const user = top10Users.find((u) => u._id.toString() === entry._id.toString());
+      return {
+        fullName: user?.fullName || "User",
+        profileImage: user?.profileImage || null,
+        totalEarnings: entry.totalEarnings,
+      };
+    });
+
+    const myIndex = all.findIndex((u) => u._id.toString() === userId.toString());
+
+    return res.status(200).json({
+      leaderboard,
+      myRank: {
+        rank: myIndex >= 0 ? myIndex + 1 : null,
+        totalEarnings: all[myIndex]?.totalEarnings || 0,
+      },
+    });
   } catch (err) {
     console.error(`❌ Leaderboard fetch error [type=${req.query.type}]:`, err);
     return res.status(500).json({ message: "Failed to fetch leaderboard" });
   }
 };
+
 
 //Forgot Password 
 exports.forgotPassword = async (req, res) => {
@@ -1019,4 +1165,25 @@ exports.getAllPublishedTrainings = async (req, res) => {
     console.error("❌ Error fetching trainings:", err.message);
     res.status(500).json({ message: "Failed to fetch trainings" });
   }
+};
+
+
+exports.adminSearchUser = async (req, res) => {
+  const query = req.query.query?.trim();
+
+  if (!query) {
+    return res.status(400).json({ message: "Search query required" });
+  }
+
+  const user = await User.findOne({
+    $or: [
+      { email: query.toLowerCase() },
+      { affiliateCode: query.toUpperCase() },
+      { mobileNumber: query },
+    ]
+  });
+
+  if (!user) return res.status(404).json({ message: "User not found" });
+
+  res.status(200).json({ user });
 };

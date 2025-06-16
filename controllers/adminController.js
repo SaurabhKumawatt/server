@@ -645,7 +645,10 @@ exports.loginAsUser = async (req, res) => {
 // Get all pending KYCs
 exports.getPendingKycs = async (req, res) => {
   try {
-    const pendingUsers = await User.find({ kycStatus: "pending" }).lean();
+    const pendingUsers = await User.find({
+      kycStatus: { $in: ["not-submitted", "pending", "rejected", "approved"] },
+    }).lean();
+
     const userIds = pendingUsers.map((u) => u._id);
 
     const kycs = await UserKyc.find({ userId: { $in: userIds } })
@@ -659,18 +662,18 @@ exports.getPendingKycs = async (req, res) => {
         ...user,
         kycDetails: kyc
           ? {
-              accountHolderName: kyc.accountHolderName || "",
-              accountNumber: kyc.accountNumber ? decrypt(kyc.accountNumber) : "",
-              ifscCode: kyc.ifscCode || "",
-              upiId: kyc.upiId ? decrypt(kyc.upiId) : "",
-              aadhaarNumber: kyc.aadhaarNumber ? decrypt(kyc.aadhaarNumber) : "",
-              panCard: kyc.panCard ? decrypt(kyc.panCard) : "",
-              aadharFrontImage: kyc.aadhaarFrontImage || "",
-              aadharBackImage: kyc.aadhaarBackImage || "",
-              panProofImage: kyc.panProofImage || "",
-              status: kyc.kycStatus || "pending",
-              rejectReason: kyc.rejectionReason || "",
-            }
+            accountHolderName: kyc.accountHolderName || "",
+            accountNumber: kyc.accountNumber ? decrypt(kyc.accountNumber) : "",
+            ifscCode: kyc.ifscCode || "",
+            upiId: kyc.upiId ? decrypt(kyc.upiId) : "",
+            aadhaarNumber: kyc.aadhaarNumber ? decrypt(kyc.aadhaarNumber) : "",
+            panCard: kyc.panCard ? decrypt(kyc.panCard) : "",
+            aadharFrontImage: kyc.aadhaarFrontImage || "",
+            aadharBackImage: kyc.aadhaarBackImage || "",
+            panProofImage: kyc.panProofImage || "",
+            status: kyc.kycStatus || "pending",
+            rejectReason: kyc.rejectionReason || "",
+          }
           : {},
       };
     });
@@ -688,19 +691,21 @@ exports.getPendingKycs = async (req, res) => {
 exports.updateKycStatus = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { status, reason } = req.body; // status: "approved" / "rejected"
+    const { status, reason } = req.body; // "approved" / "rejected"
 
-    // 1. Update User's primary KYC status
+    // ✅ 1. Update User's KYC status
     const user = await User.findByIdAndUpdate(
       userId,
       { kycStatus: status },
       { new: true }
     );
 
-    // 2. Update secondary UserKyc (save rejection reason also)
+    // ✅ 2. Update only the rejection reason in UserKyc
     const kyc = await UserKyc.findOneAndUpdate(
-      { user: userId },
-      { status, rejectionReason: reason || "" },
+      { userId },
+      {
+        rejectionReason: status === "rejected" ? reason || "Rejected by admin" : null,
+      },
       { new: true }
     );
 

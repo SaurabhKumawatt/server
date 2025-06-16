@@ -52,7 +52,10 @@ const userKycSchema = new mongoose.Schema(
       unique: true,
       required: true,
     },
-
+    bankProofDoc: {
+      type: String,
+      required: true,
+    },
     aadhaarFrontImage: {
       type: String,
       required: true,
@@ -76,8 +79,8 @@ const userKycSchema = new mongoose.Schema(
 
     kycStatus: {
       type: String,
-      enum: ["pending", "approved", "rejected"],
-      default: "pending",
+      enum: ["not-submitted","pending", "approved", "rejected"],
+      default: "not-submitted",
     },
 
     verifiedAt: {

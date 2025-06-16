@@ -671,6 +671,7 @@ exports.getPendingKycs = async (req, res) => {
             aadharFrontImage: kyc.aadhaarFrontImage || "",
             aadharBackImage: kyc.aadhaarBackImage || "",
             panProofImage: kyc.panProofImage || "",
+            bankProofDoc: kyc.bankProofDoc || "",
             status: kyc.kycStatus || "pending",
             rejectReason: kyc.rejectionReason || "",
           }

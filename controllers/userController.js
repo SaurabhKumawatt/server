@@ -978,14 +978,22 @@ exports.getLeaderboard = async (req, res) => {
         },
       ]);
 
-      const top10 = all.slice(0, 10);
       const myIndex = all.findIndex((u) => u._id.toString() === userId.toString());
+      const myData = all[myIndex] || null;
+
+      const leaderboard = all.slice(0, 9);
+      const alreadyInTop10 = leaderboard.some((u) => u._id.toString() === userId.toString());
+
+      // Add user’s own rank at the bottom if not in top 10
+      if (!alreadyInTop10 && myData) {
+        leaderboard.push({ ...myData, rank: myIndex + 1 });
+      }
 
       return res.status(200).json({
-        leaderboard: top10,
+        leaderboard,
         myRank: {
           rank: myIndex >= 0 ? myIndex + 1 : null,
-          totalEarnings: all[myIndex]?.totalEarnings || 0,
+          totalEarnings: myData?.totalEarnings || 0,
         },
       });
     }
@@ -1004,27 +1012,42 @@ exports.getLeaderboard = async (req, res) => {
       { $sort: { totalEarnings: -1 } },
     ]);
 
-    const top10Ids = all.slice(0, 10).map((u) => u._id);
-    const top10Users = await User.find({ _id: { $in: top10Ids } })
+    const myIndex = all.findIndex((u) => u._id.toString() === userId.toString());
+    const myData = all[myIndex] || null;
+
+    const topUsers = await User.find({ _id: { $in: all.map(u => u._id) } })
       .select("fullName profileImage")
       .lean();
 
-    const leaderboard = all.slice(0, 10).map((entry) => {
-      const user = top10Users.find((u) => u._id.toString() === entry._id.toString());
+    const top10 = all.slice(0, 10).map((entry, idx) => {
+      const user = topUsers.find((u) => u._id.toString() === entry._id.toString());
       return {
         fullName: user?.fullName || "User",
         profileImage: user?.profileImage || null,
         totalEarnings: entry.totalEarnings,
+        _id: entry._id,
+        rank: idx + 1
       };
     });
 
-    const myIndex = all.findIndex((u) => u._id.toString() === userId.toString());
+    const alreadyInTop10 = top10.some((u) => u._id.toString() === userId.toString());
+
+    if (!alreadyInTop10 && myData) {
+      const user = topUsers.find((u) => u._id.toString() === myData._id.toString());
+      top10.push({
+        fullName: user?.fullName || "You",
+        profileImage: user?.profileImage || null,
+        totalEarnings: myData.totalEarnings,
+        _id: myData._id,
+        rank: myIndex + 1
+      });
+    }
 
     return res.status(200).json({
-      leaderboard,
+      leaderboard: top10,
       myRank: {
         rank: myIndex >= 0 ? myIndex + 1 : null,
-        totalEarnings: all[myIndex]?.totalEarnings || 0,
+        totalEarnings: myData?.totalEarnings || 0,
       },
     });
   } catch (err) {
@@ -1032,6 +1055,7 @@ exports.getLeaderboard = async (req, res) => {
     return res.status(500).json({ message: "Failed to fetch leaderboard" });
   }
 };
+
 
 
 //Forgot Password 

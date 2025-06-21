@@ -104,7 +104,6 @@ exports.getUsersForPayout = async (req, res) => {
   }
 };
 
-
 exports.getUsersForPayoutApproval = async (req, res) => {
   try {
     const { weekStart, weekEnd, kycStatus = "approved" } = req.query;
@@ -214,14 +213,8 @@ exports.approveAndGeneratePayout = async (req, res) => {
         continue;
       }
 
-      // Sum all commission amounts as numbers (decimal safe)
       const totalAmount = Number(
         commissions.reduce((sum, c) => sum + Number(c.amount), 0).toFixed(2)
-      );
-
-      await Commissions.updateMany(
-        { _id: { $in: commissions.map((c) => c._id) } },
-        { $set: { status: "approved" } }
       );
 
       const user = await User.findById(userId).lean();
@@ -242,31 +235,32 @@ exports.approveAndGeneratePayout = async (req, res) => {
         continue;
       }
 
-      const tdsPercent = 2; // configurable agar chahiye toh
-      // Calculate TDS and Net Amount precisely
+      const decryptedAccountNumber = decrypt(kyc.accountNumber);
+
+      const tdsPercent = 2;
       const tdsAmount = Number(((tdsPercent / 100) * totalAmount).toFixed(2));
       const netAmount = Number((totalAmount - tdsAmount).toFixed(2));
 
       const pastUnpaid = await Commissions.aggregate([
-        { $match: { userId: userId, status: "unpaid", createdAt: { $lt: start } } },
+        { $match: { userId, status: "unpaid", createdAt: { $lt: start } } },
         { $group: { _id: "$userId", unpaid: { $sum: "$amount" } } },
       ]);
 
       const unpaidAmount = pastUnpaid[0]?.unpaid || 0;
       const remarks = unpaidAmount > 0 ? `last week payout pending: ₹${unpaidAmount}` : "";
 
-      await Payout.create({
+      const payout = await Payout.create({
         userId,
-        commissionIds: commissions.map(c => c._id),
+        commissionIds: commissions.map((c) => c._id),
         beneficiaryName: kyc.accountHolderName,
-        accountNumber: kyc.accountNumber,
+        accountNumber: decryptedAccountNumber,
         ifscCode: kyc.ifscCode,
-        totalAmount: totalAmount,
+        totalAmount,
         tds: {
           amount: tdsAmount,
           percent: tdsPercent,
         },
-        netAmount: netAmount,
+        netAmount,
         status: "approved",
         transactionType: "NEFT",
         remarks,
@@ -274,9 +268,14 @@ exports.approveAndGeneratePayout = async (req, res) => {
         toDate: end,
       });
 
+      await Commissions.updateMany(
+        { _id: { $in: commissions.map((c) => c._id) } },
+        { $set: { status: "approved" } }
+      );
+
       rows.push({
         "Beneficiary Name": kyc.accountHolderName,
-        "Beneficiary Account Number": kyc.accountNumber,
+        "Beneficiary Account Number": decryptedAccountNumber,
         IFSC: kyc.ifscCode,
         "Transaction Type": "NEFT",
         "Total Amount": totalAmount,
@@ -517,6 +516,29 @@ exports.getCompletePayouts = async (req, res) => {
   } catch (err) {
     console.error("❌ Error fetching complete payouts:", err);
     res.status(500).json({ message: "Failed to fetch completed payouts" });
+  }
+};
+
+exports.getFailedPayouts = async (req, res) => {
+  try {
+    const failedPayouts = await Payout.find({ status: "failed" })
+      .populate("userId", "fullName email mobileNumber affiliateCode")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const formatted = failedPayouts.map((p) => ({
+      _id: p._id,
+      user: p.userId,
+      amount: p.netAmount,
+      reason: p.remarks || "No reason specified",
+      transactionDate: p.transactionDate ? new Date(p.transactionDate).toLocaleDateString("en-IN") : "-",
+      payoutDate: p.createdAt ? new Date(p.createdAt).toLocaleDateString("en-IN") : "-",
+    }));
+
+    res.status(200).json(formatted);
+  } catch (err) {
+    console.error("❌ Failed to fetch failed payouts:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -887,4 +909,31 @@ exports.bulkRegisterAndEnrollWithRelations = async (req, res) => {
   }
 
   res.json({ message: "Bulk processing complete", results });
+};
+
+exports.getReceivedPayments = async (req, res) => {
+  try {
+    const payments = await Payment.find({ status: "captured" })
+      .populate("user", "fullName email mobileNumber affiliateCode")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const formatted = payments.map((p) => ({
+      _id: p._id,
+      user: p.user,
+      amount: p.amountPaid,
+      currency: p.currency || "INR",
+      method: p.paymentMethod || "N/A",
+      courseType: p.forBundleCourseId ? "Bundle" : "Single",
+      courseId: p.courseId || p.forBundleCourseId,
+      razorpayOrderId: p.razorpayOrderId,
+      razorpayPaymentId: p.razorpayPaymentId,
+      paidAt: new Date(p.createdAt).toLocaleString("en-IN"),
+    }));
+
+    res.status(200).json(formatted);
+  } catch (err) {
+    console.error("❌ Failed to fetch received payments:", err);
+    res.status(500).json({ message: "Server error" });
+  }
 };

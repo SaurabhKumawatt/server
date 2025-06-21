@@ -25,7 +25,9 @@ const {
      loginAsUser,
      getPendingKycs,
      updateKycStatus,
-     bulkRegisterAndEnrollWithRelations
+     bulkRegisterAndEnrollWithRelations,
+     getFailedPayouts,
+     getReceivedPayments
 } = require("../controllers/adminController");
 
 // 🔐 Get complete user info (admin only)
@@ -68,6 +70,8 @@ router.post(
   authorizeRoles("admin"),
   bulkRegisterAndEnrollWithRelations
 );
+router.get("/payouts/failed", protect, authorizeRoles("admin"), getFailedPayouts);
+router.get("/payments/received", protect, authorizeRoles("admin"), getReceivedPayments);
 
 
 

@@ -27,7 +27,10 @@ const {
      updateKycStatus,
      bulkRegisterAndEnrollWithRelations,
      getFailedPayouts,
-     getReceivedPayments
+     getReceivedPayments,
+     deleteUnpaidAffiliate,
+     getAllWebinars,
+     createOrUpdateWebinar
 } = require("../controllers/adminController");
 
 // 🔐 Get complete user info (admin only)
@@ -72,7 +75,25 @@ router.post(
 );
 router.get("/payouts/failed", protect, authorizeRoles("admin"), getFailedPayouts);
 router.get("/payments/received", protect, authorizeRoles("admin"), getReceivedPayments);
+router.delete(
+  "/users/unpaid/:id",
+  protect,
+  authorizeRoles("admin"),
+  deleteUnpaidAffiliate
+);
+router.post(
+  "/webinars",
+  protect,
+  authorizeRoles("admin"),
+  upload.single("thumbnail"), // assuming you use multer
+  createOrUpdateWebinar
+);
 
-
+router.get(
+  "/webinars",
+  protect,
+  authorizeRoles("admin"),
+  getAllWebinars
+);
 
 module.exports = router;

@@ -21,6 +21,8 @@ const Leads = require("../models/Leads");
 const Course = require("../models/Course");
 const { Types } = require("mongoose");
 const Payment = require("../models/Payment");
+const Webinar = require("../models/Webinar");
+const validator = require("validator");
 
 
 
@@ -609,7 +611,10 @@ exports.getAllUserSummaries = async (req, res) => {
         const totalUnpaid = commissions
           .filter((c) => c.status === "pending" || c.status === "unpaid")
           .reduce((acc, c) => acc + c.amount, 0);
-
+        const totalIndustryEarning = user.industryEarnings?.reduce(
+          (acc, e) => acc + (e.currentTotal || 0),
+          0
+        ) || 0;
         const sponsor = user.sponsorCode
           ? await User.findOne({ affiliateCode: user.sponsorCode })
           : null;
@@ -619,9 +624,11 @@ exports.getAllUserSummaries = async (req, res) => {
           name: user.fullName,
           mobile: user.mobileNumber,
           email: user.email,
+          role: user.role,
           enrolledBundles: user.enrolledCourses.map((ec) => ec.course?.title),
           sponsorId: user.sponsorCode || "N/A",
           sponsorName: sponsor?.fullName || "N/A",
+          industryEarning: totalIndustryEarning,
           totalEarnings,
           totalPaid,
           totalUnpaid,
@@ -638,6 +645,30 @@ exports.getAllUserSummaries = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch user summaries" });
   }
 };
+
+exports.deleteUnpaidAffiliate = async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    if (user.role !== "unpaid-affiliate") {
+      return res.status(400).json({ message: "Only unpaid affiliates can be deleted using this route" });
+    }
+
+    // ✅ Only delete lead entry where this user is a lead (not as referrer)
+    await Leads.deleteMany({ userId });
+
+    // Delete user itself
+    await user.deleteOne();
+
+    res.status(200).json({ message: "Unpaid affiliate and their lead entry deleted successfully" });
+  } catch (err) {
+    console.error("❌ Error deleting unpaid affiliate:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 
 // ✅ Admin Login As User (Impersonate)
 exports.loginAsUser = async (req, res) => {
@@ -934,6 +965,66 @@ exports.getReceivedPayments = async (req, res) => {
     res.status(200).json(formatted);
   } catch (err) {
     console.error("❌ Failed to fetch received payments:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+exports.createOrUpdateWebinar = async (req, res) => {
+  try {
+    const { title, date, time, zoomLink, youtubeLink, status } = req.body;
+    const thumbnail = req.file?.path;
+
+    // Basic validation
+    if (!title || !date || !time)
+      return res.status(400).json({ message: "Title, date, and time are required." });
+
+    if (!/^(0?[1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)$/i.test(time))
+      return res.status(400).json({ message: "Invalid time format (use HH:MM AM/PM)" });
+
+    if (zoomLink && !validator.isURL(zoomLink))
+      return res.status(400).json({ message: "Invalid Zoom link" });
+
+    if (youtubeLink && !validator.isURL(youtubeLink))
+      return res.status(400).json({ message: "Invalid YouTube link" });
+
+    if (thumbnail && !validator.isURL(thumbnail))
+      return res.status(400).json({ message: "Invalid thumbnail URL" });
+
+    let webinar = await Webinar.findOne({ date });
+
+    if (webinar) {
+      webinar.title = title.trim();
+      webinar.time = time.trim();
+      webinar.zoomLink = zoomLink?.trim();
+      webinar.youtubeLink = youtubeLink?.trim();
+      webinar.thumbnail = thumbnail || webinar.thumbnail;
+      webinar.status = status || webinar.status;
+      await webinar.save();
+    } else {
+      webinar = await Webinar.create({
+        title: title.trim(),
+        date,
+        time: time.trim(),
+        zoomLink: zoomLink?.trim(),
+        youtubeLink: youtubeLink?.trim(),
+        thumbnail,
+        status,
+      });
+    }
+
+    res.status(200).json({ message: "Webinar saved", webinar });
+  } catch (err) {
+    console.error("❌ Error saving webinar:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+exports.getAllWebinars = async (req, res) => {
+  try {
+    const webinars = await Webinar.find().sort({ date: 1 });
+    res.status(200).json(webinars);
+  } catch (err) {
+    console.error("❌ Error fetching webinars:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

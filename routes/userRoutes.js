@@ -30,7 +30,8 @@ const {
   getLeaderboard,
   getAllPublishedTrainings,
   adminSearchUser,
-  updateKycDetails
+  updateKycDetails,
+  getAllWebinars
 } = require("../controllers/userController");
 
 // 🔐 Middlewares
@@ -177,7 +178,7 @@ router.patch(
   updateIndustryEarnings
 );
 router.get("/admin-search", protect, authorizeRoles("admin"), adminSearchUser);
-
+router.get("/webinars", protect, authorizeRoles("paid-affiliate"), getAllWebinars);
 
 
 module.exports = router;

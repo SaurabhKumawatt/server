@@ -18,6 +18,7 @@ const mongoose = require("mongoose");
 const sanitizeHtml = require("sanitize-html");
 const { encrypt } = require("../utils/encrypt");
 const { decrypt } = require("../utils/encrypt");
+const Webinar = require("../models/Webinar");
 
 
 // Generate JWT Token
@@ -1210,4 +1211,24 @@ exports.adminSearchUser = async (req, res) => {
   if (!user) return res.status(404).json({ message: "User not found" });
 
   res.status(200).json({ user });
+};
+
+
+exports.getAllWebinars = async (req, res) => {
+  try {
+    const webinars = await Webinar.find({}, {
+      title: 1,
+      date: 1,
+      time: 1,
+      thumbnail: 1,
+      zoomLink: 1,
+      youtubeLink: 1,
+      status: 1,
+    }).sort({ date: 1 });
+
+    res.status(200).json(webinars);
+  } catch (err) {
+    console.error("❌ Error fetching webinars (user):", err);
+    res.status(500).json({ message: "Server error" });
+  }
 };

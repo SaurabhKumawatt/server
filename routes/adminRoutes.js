@@ -8,7 +8,7 @@ const upload = multer({ dest: "uploads/" });
 const { protect } = require("../middleware/auth");
 const { authorizeRoles } = require("../middleware/roles"); 
 const { uploadPayoutFile } = require("../middleware/multerMiddleware");
-const { uploadTrainingThumbnail } = require("../middleware/cloudinaryUpload");
+const { uploadTrainingThumbnail, uploadWebinarThumbnail } = require("../middleware/cloudinaryUpload");
 
 const {
     getUsersForPayoutApproval,
@@ -85,7 +85,7 @@ router.post(
   "/webinars",
   protect,
   authorizeRoles("admin"),
-  upload.single("thumbnail"), // assuming you use multer
+  uploadWebinarThumbnail.single("thumbnail"), // 🔗 Cloudinary thumbnail middleware
   createOrUpdateWebinar
 );
 

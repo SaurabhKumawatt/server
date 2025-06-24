@@ -28,7 +28,18 @@ const trainingThumbnailStorage = new CloudinaryStorage({
     transformation: [{ width: 800, height: 450, crop: "fill" }],
   },
 });
+const webinarThumbnailStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "stravix/webinars",
+    allowed_formats: ["jpg", "jpeg", "png", "webp"],
+    // ❌ No transformation for original quality
+  },
+});
+
+
 
 exports.uploadTrainingThumbnail = multer({ storage: trainingThumbnailStorage });
 exports.uploadProfileImage = multer({ storage: profileStorage });
 exports.uploadThumbnailImage = multer({ storage: thumbnailStorage });
+exports.uploadWebinarThumbnail = multer({ storage: webinarThumbnailStorage });

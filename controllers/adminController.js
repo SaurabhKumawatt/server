@@ -974,33 +974,40 @@ exports.createOrUpdateWebinar = async (req, res) => {
     const { title, date, time, zoomLink, youtubeLink, status } = req.body;
     const thumbnail = req.file?.path;
 
-    // Basic validation
-    if (!title || !date || !time)
+    // 🔒 Validation
+    if (!title?.trim() || !date || !time?.trim()) {
       return res.status(400).json({ message: "Title, date, and time are required." });
+    }
 
-    if (!/^(0?[1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)$/i.test(time))
+    if (!/^(0?[1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)$/i.test(time.trim())) {
       return res.status(400).json({ message: "Invalid time format (use HH:MM AM/PM)" });
+    }
 
-    if (zoomLink && !validator.isURL(zoomLink))
+    if (zoomLink && !validator.isURL(zoomLink)) {
       return res.status(400).json({ message: "Invalid Zoom link" });
+    }
 
-    if (youtubeLink && !validator.isURL(youtubeLink))
+    if (youtubeLink && !validator.isURL(youtubeLink)) {
       return res.status(400).json({ message: "Invalid YouTube link" });
+    }
 
-    if (thumbnail && !validator.isURL(thumbnail))
+    if (thumbnail && !validator.isURL(thumbnail)) {
       return res.status(400).json({ message: "Invalid thumbnail URL" });
+    }
 
     let webinar = await Webinar.findOne({ date });
 
     if (webinar) {
+      // 🔁 Update
       webinar.title = title.trim();
       webinar.time = time.trim();
-      webinar.zoomLink = zoomLink?.trim();
-      webinar.youtubeLink = youtubeLink?.trim();
+      webinar.zoomLink = zoomLink?.trim() || "";
+      webinar.youtubeLink = youtubeLink?.trim() || "";
       webinar.thumbnail = thumbnail || webinar.thumbnail;
       webinar.status = status || webinar.status;
       await webinar.save();
     } else {
+      // 🆕 Create
       webinar = await Webinar.create({
         title: title.trim(),
         date,

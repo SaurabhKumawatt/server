@@ -2,6 +2,7 @@ const Enrollment = require("../models/Enrollments");
 const Course = require("../models/Course");
 const User = require("../models/User");
 const Payment = require("../models/Payment");
+const generateCertificate = require("../utils/generateCertificate");
 
 // ✅ User: Get all enrolled courses
 exports.getUserEnrollments = async (req, res) => {
@@ -32,11 +33,26 @@ exports.updateCourseProgress = async (req, res) => {
     }
 
     enrollment.progress = progress;
+
+    // Generate certificate if progress ≥ 85% and not already generated
+    if (progress >= 85 && !enrollment.certificateGenerated) {
+      const user = await User.findById(req.user._id);
+      const course = await Course.findById(courseId);
+
+      const certUrl = await generateCertificate({
+        fullName: user.fullName,
+        courseTitle: course.title,
+      });
+
+      enrollment.certificateUrl = certUrl;
+      enrollment.certificateGenerated = true;
+    }
+
     await enrollment.save();
 
     res.json({ message: "Progress updated", enrollment });
   } catch (err) {
-    console.error("Progress update error:", err);
+    console.error("❌ Progress update error:", err);
     res.status(400).json({ message: "Failed to update progress" });
   }
 };

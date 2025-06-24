@@ -178,7 +178,7 @@ router.patch(
   updateIndustryEarnings
 );
 router.get("/admin-search", protect, authorizeRoles("admin"), adminSearchUser);
-router.get("/webinars", protect, authorizeRoles("paid-affiliate"), getAllWebinars);
+router.get("/webinars", protect, authorizeRoles("paid-affiliate", "admin"), getAllWebinars);
 
 
 module.exports = router;

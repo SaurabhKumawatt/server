@@ -1026,6 +1026,21 @@ exports.createOrUpdateWebinar = async (req, res) => {
   }
 };
 
+exports.deleteWebinar = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await Webinar.findByIdAndDelete(id);
+    if (!deleted) {
+      return res.status(404).json({ message: "Webinar not found" });
+    }
+    res.status(200).json({ message: "Webinar deleted successfully" });
+  } catch (err) {
+    console.error("❌ Error deleting webinar:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+
 exports.getAllWebinars = async (req, res) => {
   try {
     const webinars = await Webinar.find().sort({ date: 1 });

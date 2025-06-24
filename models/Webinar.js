@@ -67,8 +67,8 @@ const webinarSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: {
-        values: ["upcoming", "completed"],
-        message: "Status must be either 'upcoming' or 'completed'",
+        values: ["upcoming", "completed", "draft"],
+        message: "Status must be either 'draft','upcoming' or 'completed'",
       },
       default: "upcoming",
     },

@@ -30,7 +30,8 @@ const {
      getReceivedPayments,
      deleteUnpaidAffiliate,
      getAllWebinars,
-     createOrUpdateWebinar
+     createOrUpdateWebinar,
+     deleteWebinar
 } = require("../controllers/adminController");
 
 // 🔐 Get complete user info (admin only)
@@ -95,5 +96,13 @@ router.get(
   authorizeRoles("admin"),
   getAllWebinars
 );
+
+router.delete(
+  "/webinars/:id",
+  protect,
+  authorizeRoles("admin"),
+  deleteWebinar
+);
+
 
 module.exports = router;

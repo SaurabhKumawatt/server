@@ -15,7 +15,6 @@ const userSchema = new mongoose.Schema(
       unique: true,
       trim: true,
       minlength: [3, "Username must be at least 3 characters"],
-      match: [/^[a-zA-Z0-9_.-]*$/, "Username contains invalid characters"],
     },
     email: {
       type: String,
@@ -36,7 +35,7 @@ const userSchema = new mongoose.Schema(
       minlength: [6, "Password must be at least 6 characters long"],
     },
     otp: {
-      code:String,
+      code: String,
       expiresAt: Date,
     },
     profileImage: {
@@ -102,10 +101,15 @@ const userSchema = new mongoose.Schema(
       max: [100, "Commission percent cannot exceed 100"],
     },
 
-     kycStatus: {
+    kycStatus: {
       type: String,
-      enum: ["not-submitted","pending", "approved", "rejected"],
+      enum: ["not-submitted", "pending", "approved", "rejected"],
       default: "not-submitted",
+    },
+    level: {
+      type: String,
+      enum: ["Starter", "Bronze", "Silver", "Gold", "Platinum", "Diamond", "Elite Legend", "Grandmaster"],
+      default: "Starter"
     },
 
     joinedAt: {
@@ -116,8 +120,8 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
-    
-    resetPasswordToken:String,
+
+    resetPasswordToken: String,
     resetPasswordExpire: Date,
 
     enrolledCourses: [

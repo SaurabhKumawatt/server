@@ -10,8 +10,8 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const fs = require("fs");
 const path = require("path");
-const { sendWelcomeEmail } = require("../utils/email");
-const { sendOtpEmail } = require("../utils/email");
+const { sendWelcomeEmail, sendUpdateOtpEmail, sendEmailUpdatedConfirmation } = require("../utils/email");
+const { sendOtpEmail, sendMobileUpdateOtpEmail } = require("../utils/email");
 const { validationResult } = require("express-validator");
 const { Types } = require("mongoose");
 const mongoose = require("mongoose");
@@ -19,6 +19,12 @@ const sanitizeHtml = require("sanitize-html");
 const { encrypt } = require("../utils/encrypt");
 const { decrypt } = require("../utils/encrypt");
 const Webinar = require("../models/Webinar");
+const validator = require("validator");
+const crypto = require("crypto");
+const ReelIdea = require("../models/ReelIdea");
+const PromotionalMaterial = require("../models/PromotionalMaterial");
+const Enrollments = require("../models/Enrollments")
+
 
 
 // Generate JWT Token
@@ -221,8 +227,18 @@ exports.getLoggedInUserProfile = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    let sponsor = null;
+    const allCommissions = await Commissions.find({ userId: user._id });
+    const totalEarnings = allCommissions.reduce((sum, c) => sum + c.amount, 0);
 
+    const { determineAffiliateLevel } = require("../utils/levelsFn");
+    const level = determineAffiliateLevel(totalEarnings);
+
+    if (user.level !== level) {
+      user.level = level;
+      await user.save();
+    }
+
+    let sponsor = null;
     if (user.sponsorCode) {
       sponsor = await User.findOne({ affiliateCode: user.sponsorCode }).select("fullName");
     }
@@ -230,6 +246,7 @@ exports.getLoggedInUserProfile = async (req, res) => {
     res.status(200).json({
       ...user.toObject(),
       sponsorName: sponsor?.fullName || null,
+      level: user.level,
     });
   } catch (err) {
     console.error("❌ Error fetching user profile:", err);
@@ -365,81 +382,53 @@ exports.submitKycDetails = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    // 🔍 Check for duplicate KYC
     const existing = await UserKyc.findOne({ userId });
-    if (existing) {
-      return res.status(400).json({ message: "KYC already submitted" });
-    }
-    // 🔐 File size validation (max 5MB each)
-    const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+    if (existing) return res.status(400).json({ message: "KYC already submitted" });
 
+    const maxSize = 5 * 1024 * 1024;
 
-    // ✅ Validate file uploads
     const aadhaarFront = req.files?.aadhaarFrontImage?.[0];
     const aadhaarBack = req.files?.aadhaarBackImage?.[0];
     const panProof = req.files?.panProofImage?.[0];
     const bankProof = req.files?.bankProofDoc?.[0];
 
-    if (aadhaarFront.size > maxSize) {
-      return res.status(400).json({ message: "Aadhaar front image is too large (max 5MB)" });
-    }
-    if (aadhaarBack.size > maxSize) {
-      return res.status(400).json({ message: "Aadhaar back image is too large (max 5MB)" });
-    }
-    if (panProof.size > maxSize) {
-      return res.status(400).json({ message: "PAN card image is too large (max 5MB)" });
-    }
-    if (bankProof.size > maxSize) {
-      return res.status(400).json({ message: "Bank Proof image is too large (max 5MB)" });
-    }
-    if (!aadhaarFront || !aadhaarBack || !panProof || !bankProof) {
-      return res.status(400).json({ message: "All 4 document images are required" });
-    }
+    // ❌ Missing file check (split)
+    if (!aadhaarFront) return res.status(400).json({ message: "Aadhaar front image is required" });
+    if (!aadhaarBack) return res.status(400).json({ message: "Aadhaar back image is required" });
+    if (!panProof) return res.status(400).json({ message: "PAN card image is required" });
+    if (!bankProof) return res.status(400).json({ message: "Bank Proof document is required" });
 
-    // 🧼 Sanitize raw inputs
+    // ❌ File size validations (split)
+    if (aadhaarFront.size > maxSize) return res.status(400).json({ message: "Aadhaar front image is too large (max 5MB)" });
+    if (aadhaarBack.size > maxSize) return res.status(400).json({ message: "Aadhaar back image is too large (max 5MB)" });
+    if (panProof.size > maxSize) return res.status(400).json({ message: "PAN card image is too large (max 5MB)" });
+    if (bankProof.size > maxSize) return res.status(400).json({ message: "Bank Proof image is too large (max 5MB)" });
+
+    // 🧼 Sanitize
     const accountHolderName = sanitizeHtml(req.body.accountHolderName?.trim() || "");
     const accountNumber = sanitizeHtml(req.body.accountNumber?.trim() || "");
     const bankName = sanitizeHtml(req.body.bankName?.trim() || "");
     const ifscCode = sanitizeHtml(req.body.ifscCode?.trim()?.toUpperCase() || "");
     const branch = sanitizeHtml(req.body.branch?.trim() || "");
     const upiId = req.body.upiId ? sanitizeHtml(req.body.upiId?.trim()) : null;
-    const aadhaarNumber = sanitizeHtml(req.body.aadhaarNumber?.trim() || "");
+    const aadhaarNumber = sanitizeHtml(req.body.aadhaarNumber?.replace(/\s+/g, "").trim() || "");
     const panCard = sanitizeHtml(req.body.panCard?.trim()?.toUpperCase() || "");
 
-    // 🔍 Manual validations
-    if (!/^[a-zA-Z\s]{3,}$/.test(accountHolderName)) {
-      return res.status(400).json({ message: "Invalid account holder name" });
+    // ❌ Field presence
+    if (!accountHolderName || !accountNumber || !bankName || !ifscCode || !branch || !aadhaarNumber || !panCard) {
+      return res.status(400).json({ message: "All fields are required" });
     }
 
-    if (accountNumber.length < 6 || accountNumber.length > 20) {
-      return res.status(400).json({ message: "Account number must be 6 to 20 digits" });
-    }
+    // 🛡 Manual validations
+    if (!/^[a-zA-Z\s]{3,}$/.test(accountHolderName)) return res.status(400).json({ message: "Invalid account holder name" });
+    if (accountNumber.length < 6 || accountNumber.length > 20) return res.status(400).json({ message: "Account number must be 6 to 20 digits" });
+    if (!/^[a-zA-Z\s]{3,}$/.test(bankName)) return res.status(400).json({ message: "Invalid bank name" });
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifscCode)) return res.status(400).json({ message: "Invalid IFSC code" });
+    if (branch.length < 3) return res.status(400).json({ message: "Branch name must be at least 3 characters" });
+    if (upiId && !/^[\w.-]+@[\w]+$/.test(upiId)) return res.status(400).json({ message: "Invalid UPI ID" });
+    if (!/^\d{12}$/.test(aadhaarNumber)) return res.status(400).json({ message: "Aadhaar number must be 12 digits" });
+    if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(panCard)) return res.status(400).json({ message: "Invalid PAN number format" });
 
-    if (!/^[a-zA-Z\s]{3,}$/.test(bankName)) {
-      return res.status(400).json({ message: "Invalid bank name" });
-    }
-
-    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifscCode)) {
-      return res.status(400).json({ message: "Invalid IFSC code" });
-    }
-
-    if (branch.length < 3) {
-      return res.status(400).json({ message: "Branch name must be at least 3 characters" });
-    }
-
-    if (upiId && !/^[\w.-]+@[\w]+$/.test(upiId)) {
-      return res.status(400).json({ message: "Invalid UPI ID" });
-    }
-
-    if (!/^\d{12}$/.test(aadhaarNumber)) {
-      return res.status(400).json({ message: "Aadhaar number must be 12 digits" });
-    }
-
-    if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(panCard)) {
-      return res.status(400).json({ message: "Invalid PAN number format" });
-    }
-
-    // 🔐 Encrypt after validation
     const cleanData = {
       userId,
       accountHolderName,
@@ -456,32 +445,16 @@ exports.submitKycDetails = async (req, res) => {
       bankProofDoc: bankProof.path,
     };
 
-    // 🚀 Create KYC document
-    try {
-      const kyc = await UserKyc.create(cleanData);
+    const kyc = await UserKyc.create(cleanData);
+    await User.findByIdAndUpdate(userId, { kycStatus: "pending" });
 
-      await User.findByIdAndUpdate(userId, { kycStatus: "pending" });
-
-      return res.status(201).json({ message: "KYC submitted successfully", kyc });
-    } catch (validationErr) {
-      if (validationErr.name === "ValidationError") {
-        const messages = Object.values(validationErr.errors).map(e => e.message);
-        return res.status(400).json({ message: messages.join(", ") });
-      }
-
-      if (validationErr.code === 11000) {
-        const field = Object.keys(validationErr.keyValue)[0];
-        return res.status(409).json({ message: `${field} already exists` });
-      }
-
-      throw validationErr;
-    }
-
+    return res.status(201).json({ message: "KYC submitted successfully", kyc });
   } catch (err) {
     console.error("❌ KYC submission error:", err.message || err);
     return res.status(500).json({ message: "Failed to submit KYC" });
   }
 };
+
 
 exports.updateKycDetails = async (req, res) => {
   try {
@@ -499,33 +472,29 @@ exports.updateKycDetails = async (req, res) => {
     const panProof = req.files?.panProofImage?.[0];
     const bankProof = req.files?.bankProofDoc?.[0];
 
-    if (!aadhaarFront || !aadhaarBack || !panProof || !bankProof) {
-      return res.status(400).json({ message: "All 4 document images are required" });
-    }
+    // ❌ Missing file check
+    if (!aadhaarFront) return res.status(400).json({ message: "Aadhaar front image is required" });
+    if (!aadhaarBack) return res.status(400).json({ message: "Aadhaar back image is required" });
+    if (!panProof) return res.status(400).json({ message: "PAN card image is required" });
+    if (!bankProof) return res.status(400).json({ message: "Bank Proof document is required" });
 
-    if (aadhaarFront.size > maxSize) {
-      return res.status(400).json({ message: "Aadhaar front image is too large (max 5MB)" });
-    }
-    if (aadhaarBack.size > maxSize) {
-      return res.status(400).json({ message: "Aadhaar back image is too large (max 5MB)" });
-    }
-    if (panProof.size > maxSize) {
-      return res.status(400).json({ message: "PAN card image is too large (max 5MB)" });
-    }
-    if (bankProof.size > maxSize) {
-      return res.status(400).json({ message: "Bank Proof image is too large (max 5MB)" });
-    }
+    // ❌ File size validations
+    if (aadhaarFront.size > maxSize) return res.status(400).json({ message: "Aadhaar front image is too large (max 5MB)" });
+    if (aadhaarBack.size > maxSize) return res.status(400).json({ message: "Aadhaar back image is too large (max 5MB)" });
+    if (panProof.size > maxSize) return res.status(400).json({ message: "PAN card image is too large (max 5MB)" });
+    if (bankProof.size > maxSize) return res.status(400).json({ message: "Bank Proof image is too large (max 5MB)" });
 
+    // 🧼 Sanitize
     const accountHolderName = sanitizeHtml(req.body.accountHolderName?.trim() || "");
     const accountNumber = sanitizeHtml(req.body.accountNumber?.trim() || "");
     const bankName = sanitizeHtml(req.body.bankName?.trim() || "");
     const ifscCode = sanitizeHtml(req.body.ifscCode?.trim()?.toUpperCase() || "");
     const branch = sanitizeHtml(req.body.branch?.trim() || "");
     const upiId = req.body.upiId ? sanitizeHtml(req.body.upiId?.trim()) : null;
-    const aadhaarNumber = sanitizeHtml(req.body.aadhaarNumber?.trim() || "");
+    const aadhaarNumber = sanitizeHtml(req.body.aadhaarNumber?.replace(/\s+/g, "").trim() || "");
     const panCard = sanitizeHtml(req.body.panCard?.trim()?.toUpperCase() || "");
 
-    // 🛡️ Manual validations (same as in submitKycDetails)
+    // 🛡️ Manual validations
     if (!/^[a-zA-Z\s]{3,}$/.test(accountHolderName)) {
       return res.status(400).json({ message: "Invalid account holder name" });
     }
@@ -579,6 +548,7 @@ exports.updateKycDetails = async (req, res) => {
     return res.status(500).json({ message: "Failed to update KYC" });
   }
 };
+
 
 
 // ✅ Get Leads
@@ -720,6 +690,17 @@ exports.updateIndustryEarnings = async (req, res) => {
 };
 
 exports.getSalesStats = async (req, res) => {
+  function getWeekStartLabel(date) {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // ensure Monday start
+    d.setDate(diff);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `Week of ${dd}/${mm}/${yyyy}`;
+  }
+
   try {
     const allowedTypes = ["daily", "weekly", "monthly"];
     const filterType = allowedTypes.includes(req.query.type) ? req.query.type : "daily";
@@ -743,9 +724,7 @@ exports.getSalesStats = async (req, res) => {
       if (filterType === "daily") {
         label = created.toLocaleDateString("en-IN");
       } else if (filterType === "weekly") {
-        const week = new Date(created);
-        week.setDate(created.getDate() - created.getDay());
-        label = `Week of ${week.toLocaleDateString("en-IN")}`;
+        label = getWeekStartLabel(created);
       } else if (filterType === "monthly") {
         label = created.toLocaleString("default", { month: "short", year: "numeric" });
       }
@@ -769,10 +748,12 @@ exports.getSalesStats = async (req, res) => {
     } else if (filterType === "weekly") {
       for (let i = 6; i >= 0; i--) {
         const week = new Date(today);
-        week.setDate(today.getDate() - i * 7);
-        const label = `Week of ${week.toLocaleDateString("en-IN")}`;
+        week.setDate(week.getDate() - i * 7);
+        const label = getWeekStartLabel(week);
         barData.push({ name: label, earnings: barMap[label] || 0 });
       }
+
+
     } else if (filterType === "monthly") {
       for (let i = 6; i >= 0; i--) {
         const month = new Date(today.getFullYear(), today.getMonth() - i, 1);
@@ -947,7 +928,6 @@ exports.getLeaderboard = async (req, res) => {
     const now = new Date();
     let dateFilter = {};
 
-    // ⏳ Date Filters
     if (type === "daily") {
       dateFilter.createdAt = { $gte: new Date(now.getFullYear(), now.getMonth(), now.getDate()) };
     } else if (type === "weekly") {
@@ -968,6 +948,9 @@ exports.getLeaderboard = async (req, res) => {
             totalIndustryEarnings: { $sum: "$industryEarnings.currentTotal" },
           },
         },
+        {
+          $match: { role: { $in: ["admin", "paid-affiliate"] } },
+        },
         { $sort: { totalIndustryEarnings: -1 } },
         {
           $project: {
@@ -982,13 +965,7 @@ exports.getLeaderboard = async (req, res) => {
       const myIndex = all.findIndex((u) => u._id.toString() === userId.toString());
       const myData = all[myIndex] || null;
 
-      const leaderboard = all.slice(0, 9);
-      const alreadyInTop10 = leaderboard.some((u) => u._id.toString() === userId.toString());
-
-      // Add user’s own rank at the bottom if not in top 10
-      if (!alreadyInTop10 && myData) {
-        leaderboard.push({ ...myData, rank: myIndex + 1 });
-      }
+      const leaderboard = all.slice(0, 10);
 
       return res.status(200).json({
         leaderboard,
@@ -999,8 +976,8 @@ exports.getLeaderboard = async (req, res) => {
       });
     }
 
-    // 🧠 Commissions Rank
-    const all = await Commissions.aggregate([
+    // 🧠 Commission Leaderboard (Non-industry)
+    const earnings = await Commissions.aggregate([
       {
         $match: type === "all" ? {} : dateFilter,
       },
@@ -1013,41 +990,48 @@ exports.getLeaderboard = async (req, res) => {
       { $sort: { totalEarnings: -1 } },
     ]);
 
-    const myIndex = all.findIndex((u) => u._id.toString() === userId.toString());
-    const myData = all[myIndex] || null;
+    const earningUserIds = earnings.map((e) => e._id.toString());
 
-    const topUsers = await User.find({ _id: { $in: all.map(u => u._id) } })
-      .select("fullName profileImage")
+    const users = await User.find({ _id: { $in: earningUserIds }, role: { $in: ["admin", "paid-affiliate"] } })
+      .select("fullName profileImage role")
       .lean();
 
-    const top10 = all.slice(0, 10).map((entry, idx) => {
-      const user = topUsers.find((u) => u._id.toString() === entry._id.toString());
+    // Only include commissions of allowed roles
+    const filtered = earnings.filter((e) =>
+      users.find((u) => u._id.toString() === e._id.toString())
+    );
+
+    const fullLeaderboard = filtered.map((entry, idx) => {
+      const user = users.find((u) => u._id.toString() === entry._id.toString());
       return {
         fullName: user?.fullName || "User",
         profileImage: user?.profileImage || null,
         totalEarnings: entry.totalEarnings,
         _id: entry._id,
-        rank: idx + 1
+        rank: idx + 1,
       };
     });
 
-    const alreadyInTop10 = top10.some((u) => u._id.toString() === userId.toString());
+    const currentUser = await User.findById(userId).select("fullName profileImage role").lean();
+    let myIndex = fullLeaderboard.findIndex((u) => u._id.toString() === userId.toString());
+    let myData = fullLeaderboard[myIndex] || null;
 
-    if (!alreadyInTop10 && myData) {
-      const user = topUsers.find((u) => u._id.toString() === myData._id.toString());
-      top10.push({
-        fullName: user?.fullName || "You",
-        profileImage: user?.profileImage || null,
-        totalEarnings: myData.totalEarnings,
-        _id: myData._id,
-        rank: myIndex + 1
-      });
+    if (!myData && ["admin", "paid-affiliate"].includes(currentUser?.role)) {
+      myData = {
+        _id: userId,
+        fullName: currentUser.fullName,
+        profileImage: currentUser.profileImage,
+        totalEarnings: 0,
+        rank: fullLeaderboard.length + 1,
+      };
     }
 
+    const leaderboard = fullLeaderboard.slice(0, 10);
+
     return res.status(200).json({
-      leaderboard: top10,
+      leaderboard,
       myRank: {
-        rank: myIndex >= 0 ? myIndex + 1 : null,
+        rank: myData ? myData.rank : null,
         totalEarnings: myData?.totalEarnings || 0,
       },
     });
@@ -1058,6 +1042,68 @@ exports.getLeaderboard = async (req, res) => {
 };
 
 
+
+
+exports.getMyNearbyRank = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    // Step 1: Get total commission per user
+    const earnings = await Commissions.aggregate([
+      {
+        $group: {
+          _id: "$userId",
+          totalEarnings: { $sum: "$amount" },
+        },
+      },
+    ]);
+
+    // Step 2: Get all users with their earnings
+    const users = await User.find().select("fullName profileImage").lean();
+
+    const merged = users.map((user) => {
+      const e = earnings.find((i) => i._id.toString() === user._id.toString());
+      return {
+        _id: user._id,
+        fullName: user.fullName,
+        profileImage: user.profileImage,
+        totalEarnings: e?.totalEarnings || 0,
+      };
+    });
+
+    // Step 3: Sort by earnings and assign rank
+    const sorted = merged
+      .sort((a, b) => b.totalEarnings - a.totalEarnings)
+      .map((u, idx) => ({ ...u, rank: idx + 1 }));
+
+    const myIndex = sorted.findIndex((u) => u._id.toString() === userId.toString());
+    const myRank = myIndex >= 0 ? myIndex + 1 : null;
+
+    const nearbyRanks = [];
+
+    if (myIndex === 0) {
+      nearbyRanks.push(sorted[myIndex]);
+      if (sorted[myIndex + 1]) nearbyRanks.push(sorted[myIndex + 1]);
+      if (sorted[myIndex + 2]) nearbyRanks.push(sorted[myIndex + 2]);
+    } else if (myIndex === sorted.length - 1) {
+      if (sorted[myIndex - 2]) nearbyRanks.push(sorted[myIndex - 2]);
+      if (sorted[myIndex - 1]) nearbyRanks.push(sorted[myIndex - 1]);
+      nearbyRanks.push(sorted[myIndex]);
+    } else {
+      if (sorted[myIndex - 1]) nearbyRanks.push(sorted[myIndex - 1]);
+      nearbyRanks.push(sorted[myIndex]);
+      if (sorted[myIndex + 1]) nearbyRanks.push(sorted[myIndex + 1]);
+    }
+
+    return res.status(200).json({
+      userRank: myRank,
+      nearbyRanks,
+    });
+  } catch (err) {
+    console.error("❌ Nearby Rank Fetch Error:", err);
+    return res.status(500).json({ message: "Failed to fetch nearby ranks" });
+  }
+};
 
 //Forgot Password 
 exports.forgotPassword = async (req, res) => {
@@ -1229,6 +1275,265 @@ exports.getAllWebinars = async (req, res) => {
     res.status(200).json(webinars);
   } catch (err) {
     console.error("❌ Error fetching webinars (user):", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+
+exports.sendOtpToCurrentEmail = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findById(req.user._id);
+
+    if (!user) return res.status(404).json({ message: "User not found." });
+    if (!email || !validator.isEmail(email)) {
+      return res.status(400).json({ message: "Invalid email format." });
+    }
+
+    const sanitizedEmail = validator.normalizeEmail(email);
+    if (sanitizedEmail !== user.email) {
+      return res.status(400).json({ message: "Email does not match your account." });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedOtp = bcrypt.hashSync(otp, 10);
+
+    user.otp = {
+      code: hashedOtp,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    };
+    await user.save();
+
+    await sendUpdateOtpEmail({ name: user.fullName, to: user.email, otp });
+    res.status(200).json({ message: "OTP sent to your current email." });
+  } catch (err) {
+    console.error("[sendOtpToCurrentEmail]", err);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+// 🔐 Verify OTP before allowing email update
+exports.verifyOtpForEmailUpdate = async (req, res) => {
+  try {
+    const { otp } = req.body;
+
+    if (!otp || !/^[0-9]{6}$/.test(otp)) {
+      return res.status(400).json({ message: "Invalid OTP format." });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user || !user.otp?.code) return res.status(400).json({ message: "OTP not found." });
+    if (Date.now() > user.otp.expiresAt) return res.status(400).json({ message: "OTP expired." });
+
+    const isMatch = await bcrypt.compare(otp, user.otp.code);
+    if (!isMatch) return res.status(400).json({ message: "Invalid OTP." });
+
+    user.otp = null; // clear OTP
+    user.markModified("otp");
+    await user.save();
+
+    res.status(200).json({ message: "OTP verified. You can now update your email." });
+  } catch (err) {
+    console.error("[verifyOtpForEmailUpdate]", err);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+// ✅ Update email after OTP verified
+exports.updateUserEmail = async (req, res) => {
+  try {
+    const { newEmail } = req.body;
+
+    if (!newEmail || !validator.isEmail(newEmail)) {
+      return res.status(400).json({ message: "Invalid new email format." });
+    }
+
+    const sanitizedNewEmail = validator.normalizeEmail(newEmail);
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: "User not found." });
+
+    const existing = await User.findOne({ email: sanitizedNewEmail });
+    if (existing) return res.status(409).json({ message: "Email already in use." });
+
+    user.email = sanitizedNewEmail;
+    await user.save();
+
+    await sendEmailUpdatedConfirmation({ name: user.fullName, to: sanitizedNewEmail });
+    res.status(200).json({ message: "Email updated successfully.", email: sanitizedNewEmail });
+  } catch (err) {
+    console.error("[updateUserEmail]", err);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+
+exports.sendOtpForMobileUpdate = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    const { mobile } = req.body;
+
+    if (!mobile || !validator.isMobilePhone(mobile, "en-IN")) {
+      return res.status(400).json({ message: "Invalid mobile number" });
+    }
+
+    if (user.mobileNumber !== mobile) {
+      return res.status(400).json({ message: "Old mobile number doesn't match" });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedOtp = crypto.createHash("sha256").update(otp).digest("hex");
+    user.otp = { code: hashedOtp, expiresAt: Date.now() + 10 * 60 * 1000 };
+    await user.save();
+
+    await sendMobileUpdateOtpEmail({ name: user.fullName, to: user.email, otp })
+
+    res.json({ message: "OTP sent to your registered email" });
+  } catch (err) {
+    console.error("OTP send error:", err);
+    res.status(500).json({ message: "Failed to send OTP" });
+  }
+};
+
+// ✅ Verify OTP
+exports.verifyOtpForMobileUpdate = async (req, res) => {
+  try {
+    const { otp } = req.body;
+    const user = await User.findById(req.user._id);
+
+    if (!otp || !validator.isNumeric(otp) || otp.length !== 6) {
+      return res.status(400).json({ message: "Invalid OTP format" });
+    }
+
+    const hashed = crypto.createHash("sha256").update(otp).digest("hex");
+    if (
+      !user.otp ||
+      user.otp.code !== hashed ||
+      user.otp.expiresAt < Date.now()
+    ) {
+      return res.status(400).json({ message: "OTP expired or incorrect" });
+    }
+
+    user.otp = undefined;
+    await user.save();
+
+    res.json({ message: "OTP verified. You can now update mobile." });
+  } catch (err) {
+    console.error("OTP verify error:", err);
+    res.status(500).json({ message: "Failed to verify OTP" });
+  }
+};
+
+// ✅ Update Mobile Number
+exports.updateMobileNumber = async (req, res) => {
+  try {
+    const { newMobile } = req.body;
+    const user = await User.findById(req.user._id);
+
+    if (!newMobile || !validator.isMobilePhone(newMobile, "en-IN")) {
+      return res.status(400).json({ message: "Invalid new mobile number" });
+    }
+
+    user.mobileNumber = newMobile;
+    await user.save();
+
+    res.json({ message: "Mobile number updated", mobileNumber: newMobile });
+  } catch (err) {
+    console.error("Mobile update error:", err);
+    res.status(500).json({ message: "Failed to update mobile number" });
+  }
+};
+
+exports.getPromotionalRootFolders = async (req, res) => {
+  try {
+    const folders = await PromotionalMaterial.find({
+      parent: null,
+      type: "folder",
+      status: "published",
+    }).sort({ isFeatured: -1, createdAt: -1 });
+
+    res.json(folders);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch folders", error: err.message });
+  }
+};
+
+exports.getPromotionalChildrenBySlug = async (req, res) => {
+  try {
+    // 🧭 1. Find parent folder by slug
+    const parent = await PromotionalMaterial.findOne({ slug: req.params.slug });
+
+    if (!parent) {
+      return res.status(404).json({ message: "Promotional Material not found" });
+    }
+
+    // 🧾 2. Find all children under it (folder + video/image assets)
+    const children = await PromotionalMaterial.find({
+      parent: parent._id,
+      status: "published",
+    }).sort({ type: 1, createdAt: -1 }); // type = folder first, then assets
+
+    res.json({ parent, children });
+  } catch (err) {
+    res.status(500).json({
+      message: "Failed to fetch promotional material children",
+      error: err.message,
+    });
+  }
+};
+
+
+exports.trackCourseUsage = async (req, res) => {
+  try {
+    const { courseId, videoId, videoTimeSpent, generalTimeSpent } = req.body;
+
+    if (!courseId) {
+      return res.status(400).json({ message: "Course ID is required" });
+    }
+
+    const enrollment = await Enrollments.findOne({
+      userId: req.user._id,
+      courseId,
+    });
+
+    if (!enrollment) {
+      return res.status(404).json({ message: "Enrollment not found" });
+    }
+
+    // 🟡 1. Save general time spent on CoursePlayer
+    if (generalTimeSpent && generalTimeSpent > 0) {
+      if (!enrollment.totalCourseTimeLogs) enrollment.totalCourseTimeLogs = [];
+
+      enrollment.totalCourseTimeLogs.push({
+        entryTime: new Date(),
+        duration: Math.min(generalTimeSpent, 3600),
+      });
+    }
+
+    // 🟢 2. Save video-wise time
+    if (videoId && videoTimeSpent && videoTimeSpent > 0) {
+      const safeDuration = Math.min(videoTimeSpent, 3600);
+
+      const existing = enrollment.videoWatchLogs.find(
+        (v) => v.videoId === videoId
+      );
+
+      if (existing) {
+        existing.duration += safeDuration;
+        existing.lastWatchedAt = new Date();
+      } else {
+        enrollment.videoWatchLogs.push({
+          videoId,
+          duration: safeDuration,
+          lastWatchedAt: new Date(),
+        });
+      }
+    }
+
+    await enrollment.save();
+
+    res.status(200).json({ message: "Time progress saved successfully" });
+  } catch (err) {
+    console.error("❌ updateCourseProgress error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

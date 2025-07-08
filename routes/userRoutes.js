@@ -1,3 +1,4 @@
+// // routes/userRoutes.js
 const express = require("express");
 const router = express.Router();
 const User = require("../models/User");
@@ -31,7 +32,17 @@ const {
   getAllPublishedTrainings,
   adminSearchUser,
   updateKycDetails,
-  getAllWebinars
+  getAllWebinars,
+  getMyNearbyRank,
+  sendOtpToCurrentEmail,
+  verifyOtpForEmailUpdate,
+  updateUserEmail,
+  sendOtpForMobileUpdate,
+  verifyOtpForMobileUpdate,
+  updateMobileNumber,
+  getPromotionalRootFolders,
+  getPromotionalChildrenBySlug,
+  trackCourseUsage
 } = require("../controllers/userController");
 
 // 🔐 Middlewares
@@ -143,6 +154,12 @@ router.patch(
 // ==============================
 // 💼 Affiliate Features
 // ==============================
+router.post("/update/send-otp", protect, authorizeRoles("paid-affiliate", "admin"), sendOtpToCurrentEmail);
+router.post("/update/verify-otp", protect, authorizeRoles("paid-affiliate", "admin"), verifyOtpForEmailUpdate);
+router.put("/update/email", protect, authorizeRoles("paid-affiliate", "admin"), updateUserEmail);
+router.post("/update-mobile/send-otp", protect, authorizeRoles("paid-affiliate", "admin"), sendOtpForMobileUpdate);
+router.post("/update-mobile/verify-otp", protect, authorizeRoles("paid-affiliate", "admin"), verifyOtpForMobileUpdate);
+router.put("/update-mobile", protect, authorizeRoles("paid-affiliate", "admin"), updateMobileNumber);
 router.get("/leads", protect, authorizeRoles("paid-affiliate", "admin"), getAffiliateLeads);
 router.delete("/leads/:id", protect, authorizeRoles("paid-affiliate", "admin"), deleteLeadById);
 router.get("/commissions", protect, authorizeRoles("paid-affiliate", "admin"), getAffiliateCommissions);
@@ -161,12 +178,20 @@ router.get("/top-income-leads", protect, authorizeRoles("paid-affiliate", "admin
 router.get("/payouts", protect, authorizeRoles("paid-affiliate", "admin"), getUserPayouts);
 router.get("/commission-summary", protect, authorizeRoles("paid-affiliate", "admin"), getCommissionSummary);
 router.get("/leaderboard", protect, getLeaderboard);
+router.get("/my-rank-nearby", protect, authorizeRoles("paid-affiliate", "admin"), getMyNearbyRank);
+router.get("/marketing/promotional", protect, authorizeRoles("paid-affiliate", "admin"), getPromotionalRootFolders);
+router.get("/marketing/promotional/:slug", protect, authorizeRoles("paid-affiliate", "admin"), getPromotionalChildrenBySlug);
+router.put("/track-usage", protect, authorizeRoles("paid-affiliate", "admin"), trackCourseUsage);
+
+
+
+
 
 
 // ==============================
 // 🔐 Admin Features
 // ==============================
-router.post("/admin-login",loginAdmin);
+router.post("/admin-login", loginAdmin);
 router.patch(
   "/:userId/industry-earnings",
   protect,
@@ -179,6 +204,10 @@ router.patch(
 );
 router.get("/admin-search", protect, authorizeRoles("admin"), adminSearchUser);
 router.get("/webinars", protect, authorizeRoles("paid-affiliate", "admin"), getAllWebinars);
-
+router.get("/stravix/:videoId", (req, res) => {
+  const { videoId } = req.params;
+  const url = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&controls=0&rel=0&modestbranding=1`;
+  res.redirect(url);
+});
 
 module.exports = router;

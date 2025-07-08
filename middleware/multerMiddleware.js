@@ -18,7 +18,6 @@ const getStorage = (folderName) => {
     filename: function (req, file, cb) {
       const ext = path.extname(file.originalname).toLowerCase();
       const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-      console.log("📦 Saving file with extension:", ext);
       cb(null, uniqueName);
     },
   });

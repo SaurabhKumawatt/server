@@ -1,5 +1,5 @@
-// controllers/adminController.js (ya payoutController.js me add kar sakte ho)
-
+// controllers/adminController.js 
+const Razorpay = require("razorpay");
 const fs = require("fs");
 const path = require("path");
 const { Parser } = require("json2csv");
@@ -23,6 +23,9 @@ const { Types } = require("mongoose");
 const Payment = require("../models/Payment");
 const Webinar = require("../models/Webinar");
 const validator = require("validator");
+const { determineAffiliateLevel } = require("../utils/levelsFn");
+const PromotionalMaterial = require("../models/PromotionalMaterial");
+
 
 
 
@@ -277,7 +280,7 @@ exports.approveAndGeneratePayout = async (req, res) => {
 
       rows.push({
         "Beneficiary Name": kyc.accountHolderName,
-        "Beneficiary Account Number": decryptedAccountNumber,
+        "Beneficiary Account Number": `="${decryptedAccountNumber}"`,
         IFSC: kyc.ifscCode,
         "Transaction Type": "NEFT",
         "Total Amount": totalAmount,
@@ -599,22 +602,28 @@ const generateToken = (id) => {
 exports.getAllUserSummaries = async (req, res) => {
   try {
     const users = await User.find().populate("enrolledCourses.course", "title");
+    const { determineAffiliateLevel } = require("../utils/levelsFn");
 
     const results = await Promise.all(
       users.map(async (user) => {
         const commissions = await Commissions.find({ userId: user._id });
 
         const totalEarnings = commissions.reduce((acc, c) => acc + c.amount, 0);
+        const level = determineAffiliateLevel(totalEarnings); // ✅ Just calculate, don’t update DB
+
         const totalPaid = commissions
           .filter((c) => c.status === "paid")
           .reduce((acc, c) => acc + c.amount, 0);
+
         const totalUnpaid = commissions
           .filter((c) => c.status === "pending" || c.status === "unpaid")
           .reduce((acc, c) => acc + c.amount, 0);
+
         const totalIndustryEarning = user.industryEarnings?.reduce(
           (acc, e) => acc + (e.currentTotal || 0),
           0
         ) || 0;
+
         const sponsor = user.sponsorCode
           ? await User.findOne({ affiliateCode: user.sponsorCode })
           : null;
@@ -635,6 +644,7 @@ exports.getAllUserSummaries = async (req, res) => {
           dateOfJoining: user.createdAt,
           kycStatus: user.kycStatus || "not-submitted",
           _id: user._id,
+          level, // ✅ This is calculated live, not from DB
         };
       })
     );
@@ -645,6 +655,7 @@ exports.getAllUserSummaries = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch user summaries" });
   }
 };
+
 
 exports.deleteUnpaidAffiliate = async (req, res) => {
   try {
@@ -959,7 +970,7 @@ exports.getReceivedPayments = async (req, res) => {
       courseId: p.courseId || p.forBundleCourseId,
       razorpayOrderId: p.razorpayOrderId,
       razorpayPaymentId: p.razorpayPaymentId,
-      paidAt: new Date(p.createdAt).toLocaleString("en-IN"),
+      paidAt: new Date(p.paidAt).toLocaleString("en-IN"),
     }));
 
     res.status(200).json(formatted);
@@ -1048,5 +1059,382 @@ exports.getAllWebinars = async (req, res) => {
   } catch (err) {
     console.error("❌ Error fetching webinars:", err);
     res.status(500).json({ message: "Server error" });
+  }
+};
+exports.createOrUpdatePromotionalMaterial = async (req, res) => {
+  try {
+    const {
+      _id,
+      title,
+      parent,
+      type,
+      url,
+      status,
+      isFeatured,
+    } = req.body;
+
+    const data = {
+      title,
+      parent: parent || null,
+      type,
+      status,
+      isFeatured,
+    };
+
+    // Drive video: set url directly
+    if (type === "video" && url) {
+      data.url = url;
+    }
+
+    // Image or folder: use uploaded thumbnail
+    if (type === "image") {
+      if (req.file && req.file.path) {
+        // Uploaded to Cloudinary
+        data.url = req.file.path;
+      } else if (url) {
+        // Provided as Drive link (raw ID or full URL)
+        const driveIdMatch = url.match(/(?:\/d\/|id=)([a-zA-Z0-9_-]{10,})/);
+        const driveId = driveIdMatch ? driveIdMatch[1] : url; // fallback to raw ID
+        data.url = `https://drive.google.com/uc?export=view&id=${driveId}`;
+      }
+    } else if (type === "folder" && req.file && req.file.path) {
+      // Folder thumbnail upload
+      data.thumbnail = req.file.path;
+    }
+
+    // Cloudinary thumbnail if folder
+    if (type === "folder" && req.file && req.file.path) {
+      data.thumbnail = req.file.path;
+    }
+
+    let result;
+    if (slug) {
+      result = await PromotionalMaterial.findOneAndUpdate({ slug }, data, { new: true });
+    } else {
+      // on creation, generate unique slug
+      const generatedSlug = title.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      data.slug = generatedSlug + "-" + uuidv4().slice(0, 6);
+      result = await PromotionalMaterial.create(data);
+    }
+
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(400).json({ message: "Operation failed", error: err.message });
+  }
+};
+
+
+exports.deletePromotionalMaterial = async (req, res) => {
+  try {
+    const deleted = await PromotionalMaterial.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ message: "Not found" });
+
+    res.json({ message: "Deleted successfully" });
+  } catch (err) {
+    res.status(400).json({ message: "Deletion failed", error: err.message });
+  }
+};
+
+exports.getAllPromotionalFolders = async (req, res) => {
+  try {
+    const folders = await PromotionalMaterial.find({
+      type: "folder"
+    })
+      .sort({ createdAt: -1 })
+      .select("title slug parent status isFeatured createdAt");
+
+    res.json(folders);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch folders", error: err.message });
+  }
+};
+
+
+const getMonthlyTDSReport = async (month) => {
+  const [year, mon] = month.split("-");
+  const start = new Date(`${year}-${mon}-01`);
+  const end = new Date(start);
+  end.setMonth(start.getMonth() + 1);
+
+  const paidPayouts = await Payout.find({
+    status: "paid",
+    createdAt: { $gte: start, $lt: end }
+  })
+    .populate("userId", "fullName affiliateCode")
+    .lean();
+
+  const kycs = await UserKyc.find({
+    userId: { $in: paidPayouts.map(p => p.userId._id) }
+  }).lean();
+
+  const report = paidPayouts.reduce((acc, p) => {
+    const uid = p.userId._id.toString();
+    if (!acc[uid]) {
+      const kyc = kycs.find(k => k.userId.toString() === uid);
+      acc[uid] = {
+        name: p.userId.fullName,
+        affiliateCode: p.userId.affiliateCode || "N/A",
+        pan: kyc?.panCard ? decrypt(kyc.panCard) : "",
+        aadhaar: kyc?.aadhaarNumber
+          ? '="' + decrypt(kyc.aadhaarNumber).toString().padStart(12, "0") + '"'
+          : "",
+
+        totalIncome: 0,
+        incomeBreakdown: [],
+        totalPaidAmount: 0,
+        paidBreakdown: [],
+        totalTds: 0,
+        tdsBreakdown: [],
+        paymentDates: [],
+      };
+    }
+
+    const paidDate = new Date(p.createdAt).toLocaleDateString("en-IN");
+    acc[uid].totalIncome += p.totalAmount;
+    acc[uid].totalPaidAmount += p.netAmount;
+    acc[uid].totalTds += p.tds.amount;
+    acc[uid].incomeBreakdown.push(`${p.totalAmount} (${paidDate})`);
+    acc[uid].paidBreakdown.push(`${p.netAmount} (${paidDate})`);
+    acc[uid].tdsBreakdown.push(`${p.tds.amount} (${paidDate})`);
+    acc[uid].paymentDates.push(paidDate);
+
+    const code = p.userId.affiliateCode || "N/A";
+    return acc;
+  }, {});
+
+  return Object.values(report);
+};
+
+// 📊 1. API: Preview report in browser (used for view only)
+exports.getMonthlyTDSReport = async (req, res) => {
+  try {
+    const { month } = req.query;
+    if (!month) return res.status(400).json({ message: "Month required" });
+
+    const report = await getMonthlyTDSReport(month);
+    res.json(report);
+  } catch (err) {
+    console.error("❌ getMonthlyTDSReport error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ⚙️ 2. Auto-cron based CSV generator (no response, only file save)
+exports.generateMonthlyTDSCSV = async () => {
+  const now = new Date();
+  const monthStr = now.toISOString().slice(0, 7); // e.g., "2025-07"
+
+  const report = await getMonthlyTDSReport(monthStr);
+  if (!report.length) return;
+
+  const parser = new Parser({
+    fields: [
+      "name", "affiliateCode", "pan", "aadhaar", "totalIncome",
+      "incomeBreakdown", "totalPaidAmount", "paidBreakdown",
+      "totalTds", "tdsBreakdown", "paymentDates",
+    ],
+    quote: '"',
+  });
+  const csv = parser.parse(report);
+
+  const folder = path.join(__dirname, "..", "downloads", "tds");
+  fs.mkdirSync(folder, { recursive: true });
+
+  const filePath = path.join(folder, `TDS-${monthStr}.csv`);
+  fs.writeFileSync(filePath, csv);
+  console.log(`✅ TDS CSV generated: ${filePath}`);
+};
+
+// 🖱️ 3. Admin-triggered manual CSV generation
+exports.generateTDSCSVByMonth = async (req, res) => {
+  try {
+    const { month } = req.body;
+    if (!month) return res.status(400).json({ message: "Month is required" });
+
+    const report = await getMonthlyTDSReport(month);
+    if (!report.length) return res.status(404).json({ message: "No data found for this month" });
+
+    const parser = new Parser({
+      fields: [
+        "name", "affiliateCode", "pan", "aadhaar", "totalIncome",
+        "incomeBreakdown", "totalPaidAmount", "paidBreakdown",
+        "totalTds", "tdsBreakdown", "paymentDates",
+      ],
+      quote: '"',
+    });
+    const csv = parser.parse(report);
+
+    const folder = path.join(__dirname, "..", "downloads", "tds");
+    fs.mkdirSync(folder, { recursive: true });
+
+    const fileName = `TDS-${month}.csv`;
+    const filePath = path.join(folder, fileName);
+    fs.writeFileSync(filePath, csv);
+
+    res.json({ success: true, fileName });
+  } catch (err) {
+    console.error("❌ generateTDSCSVByMonth error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// 📁 4. List all available TDS CSV files
+exports.listTDSFiles = (req, res) => {
+  const dir = path.join(__dirname, "..", "downloads", "tds");
+  if (!fs.existsSync(dir)) return res.json([]);
+
+  const files = fs.readdirSync(dir).filter(f => f.endsWith(".csv"));
+  const data = files.map(f => {
+    const stats = fs.statSync(path.join(dir, f));
+    const name = f.replace(".csv", "").replace("TDS-", "");
+    return {
+      fileName: f,
+      month: name,
+      generatedAt: stats.birthtime,
+    };
+  });
+
+  res.json(data.sort((a, b) => new Date(b.generatedAt) - new Date(a.generatedAt)));
+};
+
+// 📦 5. Download selected TDS file
+exports.downloadTDSCSV = (req, res) => {
+  const { fileName } = req.params;
+  const filePath = path.join(__dirname, "..", "downloads", "tds", fileName);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ message: "File not found" });
+  res.download(filePath);
+};
+
+
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
+});
+
+exports.exportInvoiceSheet = async (req, res) => {
+  try {
+    const { fromDate, toDate } = req.query;
+    const start = new Date(fromDate);
+    const end = new Date(toDate);
+    end.setHours(23, 59, 59, 999);
+
+    const payments = await Payment.find({
+      paidAt: { $gte: start, $lte: end },
+    })
+      .populate("user")
+      .populate("forBundleCourseId")
+      .lean();
+
+    const verifiedRows = [];
+
+    for (let p of payments) {
+      const paymentId = p.razorpayPaymentId;
+      if (!paymentId || paymentId.startsWith("MANUAL") || paymentId.startsWith("TEST")) continue;
+
+      let razorpayData;
+      try {
+        razorpayData = await razorpay.payments.fetch(paymentId);
+      } catch (err) {
+        console.warn(`❌ Razorpay fetch failed for ${paymentId}:`, err?.error?.description || err?.message || err);
+        continue;
+      }
+
+      if (razorpayData.status !== "captured") {
+        console.log(`⛔ Payment ${paymentId} not captured, skipping.`);
+        continue;
+      }
+
+      const user = p.user;
+      const course = p.forBundleCourseId;
+      if (!user || !course) continue;
+
+      const price = course.discountedPrice || course.price || 0;
+      const taxableAmount = +(price / 1.18).toFixed(2);
+
+      const isDelhi =
+        (user.state && user.state.toLowerCase().includes("delhi")) ||
+        (user.address && user.address.toLowerCase().includes("delhi"));
+
+      const cgst = isDelhi ? +(taxableAmount * 0.09).toFixed(2) : 0;
+      const sgst = isDelhi ? +(taxableAmount * 0.09).toFixed(2) : 0;
+      const igst = !isDelhi ? +(taxableAmount * 0.18).toFixed(2) : 0;
+      const totalAmount = +(taxableAmount + cgst + sgst + igst).toFixed(2);
+
+      verifiedRows.push({
+        "Invoice No.": user.affiliateCode || "-",
+        "Invoice Date": new Date(p.paidAt).toLocaleDateString("en-IN"),
+        "SAC Code": "9983",
+        "Name": user.fullName || "-",
+        "GST No.": "NA",
+        "Place": user.state || "N/A",
+        "Taxable Amount": taxableAmount,
+        "CGST (9%)": cgst,
+        "SGST (9%)": sgst,
+        "IGST (18%)": igst,
+        "Total Amount": totalAmount,
+        "Tax %": "18%",
+      });
+    }
+
+    if (verifiedRows.length === 0) {
+      return res.status(404).json({ message: "No valid payments found for selected range" });
+    }
+
+    const ws = XLSX.utils.json_to_sheet(verifiedRows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Invoices");
+
+    const fileName = `invoice-sheet-${fromDate}-to-${toDate}.xlsx`;
+    const filePath = path.join(__dirname, "..", "downloads", "invoices", fileName);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    XLSX.writeFile(wb, filePath);
+
+    res.download(filePath, fileName);
+  } catch (err) {
+    console.error("❌ Invoice Export Error:", err);
+    res.status(500).json({ message: "Failed to generate invoice sheet" });
+  }
+};
+
+exports.listInvoiceFiles = async (req, res) => {
+  try {
+    const invoiceDir = path.join(__dirname, "..", "downloads", "invoices");
+
+    if (!fs.existsSync(invoiceDir)) return res.status(200).json([]);
+
+    const files = fs.readdirSync(invoiceDir).filter(f => f.endsWith(".xlsx"));
+
+    const data = files.map((file) => {
+      const filePath = path.join(invoiceDir, file);
+      const stats = fs.statSync(filePath);
+      return {
+        fileName: file,
+        url: `/downloads/invoices/${file}`,
+        createdAt: stats.birthtime,
+      };
+    });
+
+    res.status(200).json(data.reverse()); // most recent first
+  } catch (err) {
+    console.error("❌ Error listing invoice files:", err);
+    res.status(500).json({ message: "Failed to fetch invoice files" });
+  }
+};
+
+exports.deleteInvoiceOrPayoutFile = async (req, res) => {
+  try {
+    const { fileName } = req.body;
+    const type = fileName.includes("invoice") ? "invoices" : "payouts";
+    const filePath = path.join(__dirname, "..", "downloads", type, fileName);
+
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      return res.status(200).json({ message: `${type} file deleted` });
+    } else {
+      return res.status(404).json({ message: "File not found" });
+    }
+  } catch (err) {
+    console.error("❌ File delete error:", err);
+    res.status(500).json({ message: "Failed to delete file" });
   }
 };

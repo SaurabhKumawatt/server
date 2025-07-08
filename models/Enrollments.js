@@ -32,12 +32,12 @@ const enrollmentsSchema = new mongoose.Schema(
             enum: ['active', 'completed', 'cancelled', 'refunded', 'pending'],
             default: 'pending'
         },
-        certificateUrl: { 
-            type: String 
+        certificateUrl: {
+            type: String
         },
-        certificateGenerated: { 
-            type: Boolean, 
-            default: false 
+        certificateGenerated: {
+            type: Boolean,
+            default: false
         },
 
         createdAt: {
@@ -47,7 +47,24 @@ const enrollmentsSchema = new mongoose.Schema(
         updatedAt: {
             type: Date,
             default: Date.now
-        }
+        },
+        videoWatchLogs: [
+            {
+                videoId: {
+                    type: String,
+                    required: true,
+                },
+                duration: {
+                    type: Number, // seconds
+                    default: 0,
+                },
+                lastWatchedAt: {
+                    type: Date,
+                    default: Date.now,
+                },
+            },
+        ],
+
     },
     { timestamps: true }
 );

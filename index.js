@@ -126,3 +126,6 @@ process.on("uncaughtException", (err) => {
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);
 });
+
+require("./cron/monthlyTDSJob");
+require("./cron/invoiceCron");

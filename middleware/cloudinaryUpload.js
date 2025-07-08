@@ -1,3 +1,4 @@
+// /server/middleware/cloudinaryUpload.js
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const multer = require("multer");
 const cloudinary = require("../utils/cloudinary");
@@ -38,8 +39,18 @@ const webinarThumbnailStorage = new CloudinaryStorage({
 });
 
 
+const promoMaterialStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "promo-materials",
+    allowed_formats: ["jpg", "jpeg", "png", "webp"],
+  },
+});
+
+
 
 exports.uploadTrainingThumbnail = multer({ storage: trainingThumbnailStorage });
 exports.uploadProfileImage = multer({ storage: profileStorage });
 exports.uploadThumbnailImage = multer({ storage: thumbnailStorage });
 exports.uploadWebinarThumbnail = multer({ storage: webinarThumbnailStorage });
+exports.uploadPromotionalThumbnail = multer({ storage: promoMaterialStorage });

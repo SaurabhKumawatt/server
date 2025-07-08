@@ -252,3 +252,133 @@ exports.sendPayoutFailureEmail = async ({ to, name, reason, netAmount }) => {
     console.error("Error sending payout failure email:", err.message);
   }
 };
+
+
+exports.sendUpdateOtpEmail = async ({ name, to, otp }) => {
+  try {
+    await transporter.sendMail({
+      from: `"StraviX" <${process.env.EMAIL_FROM}>`,
+      to,
+      subject: "OTP for Email Change - OTP Inside",
+      html: `
+        <div style="width: 100%; margin: auto; font-family: Arial, sans-serif; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+          <!-- Header -->
+          <div style="background-color: #182432; padding: 20px; text-align: center; color: #fff;">
+            <img src="https://www.upthrivex.com/assets/logos/stravix 300 by 100.png" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
+            <h2 style="margin: 0; font-size: 12px;">Where Skills Meet Success</h2>
+            <h2 style="margin: 0; font-size: 22px;">OTP for Email Change</h2>
+          </div>
+
+          <!-- Body -->
+          <div style="padding: 30px; background-color: #ffffff; color: #333;">
+            <p>Dear <strong>${name}</strong>,</p>
+
+            <p>
+              We received a request to change your email address. To proceed, please use the One-Time Password (OTP) below:
+            </p>
+
+            <p style="font-size: 24px; font-weight: bold; text-align: center; letter-spacing: 4px; margin: 30px 0;">
+              OTP: <span style="color: #182432;">${otp}</span>
+            </p>
+
+            <p style="text-align: center; font-size: 14px; color: #555; margin-bottom: 30px;">
+              Validity: This OTP is valid for <strong>10 minutes</strong> and can be used only once.
+            </p>
+
+            <p>
+              If you didn't request an email change, please contact our support team at
+              <a href="mailto:customerfirst@stravix.in" style="color: #1f3bb3;">customerfirst@stravix.in</a> to secure your account.
+            </p>
+
+            <p>Best regards,<br/>StraviX Team</p>
+          </div>
+
+          <!-- Footer -->
+          <div style="background-color: #182432; text-align: center; padding: 10px; font-size: 12px; color: #999;">
+            © ${new Date().getFullYear()} StraviX. All rights reserved.
+          </div>
+        </div>
+      `,
+    });
+  } catch (err) {
+    console.error("Error sending update OTP email:", err.message);
+  }
+};
+
+
+// ✅ Confirmation Email After Successful Update
+exports.sendEmailUpdatedConfirmation = async ({ name, to }) => {
+  try {
+    await transporter.sendMail({
+      from: `\"StraviX\" <${process.env.EMAIL_FROM}>`,
+      to,
+      subject: "Your Email Has Been Successfully Updated!",
+      html: `
+        <div style="font-family: Arial, sans-serif;">
+          <div style="background-color: #182432; padding: 20px; text-align: center; color: #fff;">
+            <img src="https://www.upthrivex.com/assets/logos/stravix 300 by 100.png" style="width: 150px;" />
+            <h2>Email Update Confirmation</h2>
+          </div>
+          <div style="padding: 30px; background-color: #ffffff;">
+            <p>Dear <strong>${name}</strong>,</p>
+            <p>Your email has been successfully updated in your StraviX profile.</p>
+            <p>If this was not done by you, please contact us immediately.</p>
+            <p>Regards,<br/>Team StraviX</p>
+          </div>
+        </div>`
+    });
+  } catch (err) {
+    console.error("Error sending email update confirmation:", err.message);
+  }
+};
+
+exports.sendMobileUpdateOtpEmail = async ({ name, to, otp }) => {
+  try {
+    await transporter.sendMail({
+      from: `"StraviX" <${process.env.EMAIL_FROM}>`,
+      to,
+      subject: "OTP for Mobile Number Update",
+      html: `
+        <div style="width: 100%; margin: auto; font-family: Arial, sans-serif; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+          <!-- Header -->
+          <div style="background-color: #182432; padding: 20px; text-align: center; color: #fff;">
+            <img src="https://www.upthrivex.com/assets/logos/stravix 300 by 100.png" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
+            <h2 style="margin: 0; font-size: 12px;">Where Skills Meet Success</h2>
+            <h2 style="margin: 0; font-size: 22px;">OTP for Mobile Number Update</h2>
+          </div>
+
+          <!-- Body -->
+          <div style="padding: 30px; background-color: #ffffff; color: #333;">
+            <p>Dear <strong>${name}</strong>,</p>
+
+            <p>
+              We received a request to change your mobile number. To proceed, please use the One-Time Password (OTP) below:
+            </p>
+
+            <p style="font-size: 24px; font-weight: bold; text-align: center; letter-spacing: 4px; margin: 30px 0;">
+              OTP: <span style="color: #182432;">${otp}</span>
+            </p>
+
+            <p style="text-align: center; font-size: 14px; color: #555; margin-bottom: 30px;">
+              Validity: This OTP is valid for <strong>10 minutes</strong> and can be used only once.
+            </p>
+
+            <p>
+              If you didn't request a mobile number change, please contact our support team at
+              <a href="mailto:customerfirst@stravix.in" style="color: #1f3bb3;">customerfirst@stravix.in</a> to secure your account.
+            </p>
+
+            <p>Best regards,<br/>StraviX Team</p>
+          </div>
+
+          <!-- Footer -->
+          <div style="background-color: #182432; text-align: center; padding: 10px; font-size: 12px; color: #999;">
+            © ${new Date().getFullYear()} StraviX. All rights reserved.
+          </div>
+        </div>
+      `,
+    });
+  } catch (err) {
+    console.error("Error sending mobile update OTP email:", err.message);
+  }
+};

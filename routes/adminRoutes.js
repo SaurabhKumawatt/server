@@ -1,4 +1,4 @@
-// routes/adminRoutes.js (naya file bana sakte ho ya payoutRoutes.js me add karo)
+// routes/adminRoutes.js 
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
@@ -6,32 +6,43 @@ const upload = multer({ dest: "uploads/" });
 
 
 const { protect } = require("../middleware/auth");
-const { authorizeRoles } = require("../middleware/roles"); 
+const { authorizeRoles } = require("../middleware/roles");
 const { uploadPayoutFile } = require("../middleware/multerMiddleware");
-const { uploadTrainingThumbnail, uploadWebinarThumbnail } = require("../middleware/cloudinaryUpload");
+const { uploadTrainingThumbnail, uploadWebinarThumbnail, uploadPromotionalThumbnail } = require("../middleware/cloudinaryUpload");
 
 const {
-    getUsersForPayoutApproval,
-    approveAndGeneratePayout,
-    listPayoutCSVFiles,
-    uploadBankResponse,
-    downloadWeeklyPayoutCSV,
-    getUsersForPayout,
-    getProcessingPayouts,
-    getCompletePayouts,
-    getPayoutCSVFiles,
-    createTraining,
-     getAllUserSummaries, 
-     loginAsUser,
-     getPendingKycs,
-     updateKycStatus,
-     bulkRegisterAndEnrollWithRelations,
-     getFailedPayouts,
-     getReceivedPayments,
-     deleteUnpaidAffiliate,
-     getAllWebinars,
-     createOrUpdateWebinar,
-     deleteWebinar
+  getUsersForPayoutApproval,
+  approveAndGeneratePayout,
+  listPayoutCSVFiles,
+  uploadBankResponse,
+  downloadWeeklyPayoutCSV,
+  getUsersForPayout,
+  getProcessingPayouts,
+  getCompletePayouts,
+  getPayoutCSVFiles,
+  createTraining,
+  getAllUserSummaries,
+  loginAsUser,
+  getPendingKycs,
+  updateKycStatus,
+  bulkRegisterAndEnrollWithRelations,
+  getFailedPayouts,
+  getReceivedPayments,
+  deleteUnpaidAffiliate,
+  getAllWebinars,
+  createOrUpdateWebinar,
+  deleteWebinar,
+  getAllPromotionalFolders,
+  createOrUpdatePromotionalMaterial,
+  deletePromotionalMaterial,
+  getMonthlyTDSReport,
+  generateTDSCSVByMonth,
+  listTDSFiles,
+  downloadTDSCSV,
+  getPromotionalMaterialById,
+  exportInvoiceSheet,
+  listInvoiceFiles,
+  deleteInvoiceOrPayoutFile
 } = require("../controllers/adminController");
 
 // 🔐 Get complete user info (admin only)
@@ -102,6 +113,54 @@ router.delete(
   protect,
   authorizeRoles("admin"),
   deleteWebinar
+);
+
+
+router.post(
+  "/marketing/promotional",
+  protect,
+  authorizeRoles("admin"),
+  uploadPromotionalThumbnail.single("thumbnail"),
+  createOrUpdatePromotionalMaterial
+);
+
+router.delete(
+  "/marketing/promotional/:id",
+  protect,
+  authorizeRoles("admin"),
+  deletePromotionalMaterial
+);
+router.get(
+  "/marketing/promotional/folders",
+  protect,
+  authorizeRoles("admin"),
+  getAllPromotionalFolders
+);
+
+
+
+router.get("/tds/report", protect, authorizeRoles("admin"), getMonthlyTDSReport);
+router.post("/tds/generate", protect, authorizeRoles("admin"), generateTDSCSVByMonth);
+router.get("/tds/files", protect, authorizeRoles("admin"), listTDSFiles);
+router.get("/tds/download/:fileName", protect, authorizeRoles("admin"), downloadTDSCSV);
+router.get(
+  "/invoices/export",
+  protect,
+  authorizeRoles("admin"),
+  exportInvoiceSheet
+);
+router.get(
+  "/invoices/files",
+  protect,
+  authorizeRoles("admin"),
+  listInvoiceFiles
+);
+
+router.delete(
+  "/:type/delete-file",
+  protect,
+  authorizeRoles("admin"),
+  deleteInvoiceOrPayoutFile
 );
 
 

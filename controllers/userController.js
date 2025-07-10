@@ -59,18 +59,16 @@ exports.registerUser = async (req, res) => {
     };
 
     // 🔍 Check if email/mobile/username already exists
-    const existingUser = await User.findOne({
-      $or: [
-        { email: cleanData.email },
-        { username: cleanData.username },
-        { mobileNumber: cleanData.mobileNumber }
-      ]
-    });
-    if (existingUser) {
-      return res.status(400).json({
-        message: "Email, mobile number or username already exists"
-      });
+    const emailExists = await User.findOne({ email: cleanData.email });
+    if (emailExists) {
+      return res.status(400).json({ message: "Email already exists" });
     }
+
+    const mobileExists = await User.findOne({ mobileNumber: cleanData.mobileNumber });
+    if (mobileExists) {
+      return res.status(400).json({ message: "Mobile number already exists" });
+    }
+
 
     // 🎯 Generate affiliate code
     const lastUser = await User.findOne({ affiliateCode: { $regex: /^SV\d+$/ } })

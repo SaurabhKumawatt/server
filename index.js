@@ -93,7 +93,7 @@ app.use("/downloads/payouts", express.static(path.join(__dirname, "..", "downloa
 
 // ✅ Health Check
 app.get("/", (req, res) => {
-  if (process.env.NODE_ENV === "production") {
+  if (process.env.NODE_ENV === "development") {
     return res.redirect(clientUrl); // redirect public root only on live
   } else {
     return res.send("✅ Stravix backend running in development");

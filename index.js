@@ -50,7 +50,7 @@ app.use(
 
 
 // 🔁 Force HTTPS (only in production)
-if (process.env.NODE_ENV === "development") {
+if (process.env.NODE_ENV === "production") {
   app.use((req, res, next) => {
     if (req.header("x-forwarded-proto") !== "https") {
       return res.redirect(`https://${req.headers.host}${req.url}`);
@@ -93,7 +93,7 @@ app.use("/downloads/payouts", express.static(path.join(__dirname, "..", "downloa
 
 // ✅ Health Check
 app.get("/", (req, res) => {
-  if (process.env.NODE_ENV === "development") {
+  if (process.env.NODE_ENV === "production") {
     return res.redirect(clientUrl); // redirect public root only on live
   } else {
     return res.send("✅ Stravix backend running in development");

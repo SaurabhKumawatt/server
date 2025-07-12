@@ -50,7 +50,7 @@ app.use(
 
 
 // 🔁 Force HTTPS (only in production)
-if (process.env.NODE_ENV === "production") {
+if (process.env.NODE_ENV === "development") {
   app.use((req, res, next) => {
     if (req.header("x-forwarded-proto") !== "https") {
       return res.redirect(`https://${req.headers.host}${req.url}`);

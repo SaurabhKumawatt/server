@@ -29,7 +29,7 @@ app.set("trust proxy", 1); // required for secure cookies & redirect
 
 // 🌐 CORS Config (with logging)
 const allowedOrigins =
-  process.env.NODE_ENV === "development"
+  process.env.NODE_ENV === "production"
     ? ["https://www.stravix.in", "https://stravix.in"]
     : ["http://localhost:5173"];
 
@@ -96,7 +96,7 @@ app.get("/", (req, res) => {
   if (process.env.NODE_ENV === "development") {
     return res.redirect(clientUrl); // redirect public root only on live
   } else {
-    return res.send("✅ Stravix backend is running securely over HTTPS!");
+    return res.send("✅ Stravix backend running in development");
   }
 });
 

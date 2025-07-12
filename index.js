@@ -7,6 +7,7 @@ const rateLimit = require("express-rate-limit");
 const cookieParser = require("cookie-parser");
 const compression = require("compression");
 const path = require("path");
+const { protect } = require("./middleware/auth");
 
 dotenv.config({
   path: process.env.NODE_ENV === "production" ? ".env.production" : ".env.local",
@@ -15,6 +16,7 @@ dotenv.config({
 const connectDB = require("./config/db");
 const app = express();
 const PORT = process.env.PORT || 5000;
+const clientUrl = process.env.CLIENT_URL || "https://www.stravix.in/";
 
 // 🧠 Connect DB first
 connectDB();
@@ -26,24 +28,26 @@ app.use(compression()); // ✅ Enable gzip compression
 app.set("trust proxy", 1); // required for secure cookies & redirect
 
 // 🌐 CORS Config (with logging)
-const allowedOrigins = [
-  "http://localhost:5173",
-  "https://www.stravix.in",
-  "https://stravix.in",
-  "https://stravix-testing-client.vercel.app",
-];
+const allowedOrigins =
+  process.env.NODE_ENV === "production"
+    ? ["https://www.stravix.in", "https://stravix.in"]
+    : ["http://localhost:5173"];
 
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.warn(`CORS BLOCKED ORIGIN: ${origin}`);
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
-  credentials: true,
-}));
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(`⛔ CORS BLOCKED: ${origin}`);
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+  })
+);
+
 
 // 🔁 Force HTTPS (only in production)
 if (process.env.NODE_ENV === "production") {
@@ -89,8 +93,13 @@ app.use("/downloads/payouts", express.static(path.join(__dirname, "..", "downloa
 
 // ✅ Health Check
 app.get("/", (req, res) => {
-  res.send("✅ Stravix backend is running securely over HTTPS!");
+  if (process.env.NODE_ENV === "production") {
+    return res.redirect(clientUrl); // redirect public root only on live
+  } else {
+    return res.send("✅ Stravix backend running in development");
+  }
 });
+
 
 // 📌 API Routes
 app.use("/api/user", require("./routes/userRoutes"));

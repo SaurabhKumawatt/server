@@ -53,7 +53,7 @@ app.use(
 if (process.env.NODE_ENV === "development") {
   app.use((req, res, next) => {
     if (req.header("x-forwarded-proto") !== "https") {
-      return res.redirect(`https://${req.headers.host}${req.url}`);
+     return res.redirect("https://www.stravix.in");
     }
     next();
   });

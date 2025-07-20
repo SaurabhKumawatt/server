@@ -29,7 +29,7 @@ app.set("trust proxy", 1); // required for secure cookies & redirect
 
 // 🌐 CORS Config (with logging)
 const allowedOrigins =
-  process.env.NODE_ENV === "development"
+  process.env.NODE_ENV === ""
     ? ["https://www.stravix.in", "https://stravix.in"]
     : ["http://localhost:5173"];
 

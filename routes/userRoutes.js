@@ -42,7 +42,9 @@ const {
   updateMobileNumber,
   getPromotionalRootFolders,
   getPromotionalChildrenBySlug,
-  trackCourseUsage
+  trackCourseUsage,
+  getTargetProgress,
+  getUserTargetCampaigns
 } = require("../controllers/userController");
 
 // 🔐 Middlewares
@@ -118,7 +120,7 @@ router.put(
   ],
   changePassword
 );
-
+router.get("/target-campaigns", protect, getUserTargetCampaigns);
 
 
 // ==============================
@@ -148,6 +150,8 @@ router.patch(
   ]),
   updateKycDetails  // 🔁 new controller to update instead of create
 );
+router.get("/target-progress", protect, getTargetProgress);
+
 
 
 

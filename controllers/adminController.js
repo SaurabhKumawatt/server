@@ -25,7 +25,8 @@ const Webinar = require("../models/Webinar");
 const validator = require("validator");
 const { determineAffiliateLevel } = require("../utils/levelsFn");
 const PromotionalMaterial = require("../models/PromotionalMaterial");
-
+const moment = require("moment");
+const TargetMilestone = require("../models/TargetMilestone");
 
 
 
@@ -425,8 +426,15 @@ exports.uploadBankResponse = async (req, res) => {
 
       console.log(`✅ Payout matched: ${payout._id}`);
 
+     
       payout.transactionType = type;
-      payout.transactionDate = txnDate || new Date();
+      const parsedTxnDate = moment(txnDate, "DD/MM/YYYY", true);
+      if (!parsedTxnDate.isValid()) {
+        console.warn(`❌ Invalid date format in row ${i + 1}: ${txnDate}`);
+        continue;
+      }
+      payout.transactionDate = parsedTxnDate.toDate();
+
       payout.utrNumber = utr || null;
       payout.status = status.toLowerCase() === "success" ? "paid" : "failed";
       payout.remarks = payout.status === "paid" ? "✅ Payout completed" : (errors || "❌ Bank error");
@@ -1436,5 +1444,34 @@ exports.deleteInvoiceOrPayoutFile = async (req, res) => {
   } catch (err) {
     console.error("❌ File delete error:", err);
     res.status(500).json({ message: "Failed to delete file" });
+  }
+};
+
+
+exports.createCampaign = async (req, res) => {
+  try {
+    const { campaign, startDate, endDate, milestones } = req.body;
+    const data = await TargetMilestone.create({ campaign, startDate, endDate, milestones });
+    res.status(201).json(data);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to create campaign", error: err.message });
+  }
+};
+
+exports.getAllCampaigns = async (req, res) => {
+  try {
+    const campaigns = await TargetMilestone.find({ isActive: true }).sort({ campaign: 1 });
+    res.json(campaigns);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch campaigns", error: err.message });
+  }
+};
+
+exports.deleteCampaign = async (req, res) => {
+  try {
+    await TargetMilestone.findByIdAndDelete(req.params.id);
+    res.json({ message: "Campaign deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ message: "Delete failed", error: err.message });
   }
 };

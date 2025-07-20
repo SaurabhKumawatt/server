@@ -42,7 +42,10 @@ const {
   getPromotionalMaterialById,
   exportInvoiceSheet,
   listInvoiceFiles,
-  deleteInvoiceOrPayoutFile
+  deleteInvoiceOrPayoutFile,
+  createCampaign,
+  getAllCampaigns,
+  deleteCampaign
 } = require("../controllers/adminController");
 
 // 🔐 Get complete user info (admin only)
@@ -162,6 +165,10 @@ router.delete(
   authorizeRoles("admin"),
   deleteInvoiceOrPayoutFile
 );
+
+router.post("/target-campaign", protect, authorizeRoles("admin"), createCampaign);
+router.get("/target-campaigns", protect, authorizeRoles("admin"), getAllCampaigns);
+router.delete("/target-campaign/:id", protect, authorizeRoles("admin"), deleteCampaign);
 
 
 module.exports = router;

@@ -24,6 +24,7 @@ const crypto = require("crypto");
 const ReelIdea = require("../models/ReelIdea");
 const PromotionalMaterial = require("../models/PromotionalMaterial");
 const Enrollments = require("../models/Enrollments")
+const TargetMilestone = require("../models/TargetMilestone");
 
 
 
@@ -1533,5 +1534,61 @@ exports.trackCourseUsage = async (req, res) => {
   } catch (err) {
     console.error("❌ updateCourseProgress error:", err);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+exports.getTargetProgress = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { from, to } = req.query;
+
+    if (!from || !to) {
+      return res.status(400).json({ message: "From and To dates are required" });
+    }
+
+    const start = new Date(from);
+    const end = new Date(to);
+    end.setDate(end.getDate() + 1); // include full end date
+
+    const commissions = await Commissions.find({
+      userId,
+      createdAt: { $gte: start, $lt: end },
+      status: { $in: ["approved", "paid"] },
+    });
+
+    const total = commissions.reduce((sum, c) => sum + c.amount, 0);
+
+    const tiers = [
+      { target: 400000, label: "₹4L+ Rewards" },
+      { target: 300000, label: "₹3L+ Rewards" },
+      { target: 200000, label: "₹2L+ Rewards" },
+      { target: 100000, label: "₹1L+ Rewards" },
+      { target: 50000,  label: "₹50K+ Rewards" },
+      { target: 0,       label: "Below ₹50K" },
+    ];
+
+    const currentTier = tiers.find(t => total >= t.target);
+
+    res.status(200).json({
+      totalEarned: total,
+      currentTier,
+      targets: tiers.map(t => ({ ...t, achieved: total >= t.target }))
+    });
+  } catch (err) {
+    console.error("🎯 Target Tracker Error:", err);
+    res.status(500).json({ message: "Failed to calculate target progress" });
+  }
+};
+
+exports.getUserTargetCampaigns = async (req, res) => {
+  try {
+    const campaigns = await TargetMilestone.find({
+      isActive: true,
+      startDate: { $lte: new Date() },
+      endDate: { $gte: new Date() },
+    }).sort({ startDate: -1 });
+    res.json(campaigns);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to load campaigns", error: err.message });
   }
 };

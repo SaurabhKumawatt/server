@@ -106,8 +106,8 @@ const userSchema = new mongoose.Schema(
     },
     level: {
       type: String,
-      enum: ["Starter", "Bronze", "Silver", "Gold", "Platinum", "Diamond", "Elite Legend", "Grandmaster"],
-      default: "Starter"
+      enum: ["StraviX Starter Club", "StraviX Spark Club", "StraviX Rise Club", "StraviX Crest Club", "StraviX Elite Club", "StraviX Titan Club", "StraviX Legacy Club", "StraviX Crown Club", "StraviX Legend Club"],
+      default: "StraviX Starter Club"
     },
 
     joinedAt: {

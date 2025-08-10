@@ -1469,6 +1469,11 @@ exports.getPromotionalChildrenBySlug = async (req, res) => {
     let children = [];
 
     if (parent.driveFolderId) {
+      if (!process.env.GDRIVE_CLIENT_EMAIL || !process.env.GDRIVE_PRIVATE_KEY) {
+        console.error("❌ Google Drive credentials missing in environment variables.");
+        return res.status(500).json({ message: "Google Drive credentials not configured" });
+      }
+
       const auth = new google.auth.GoogleAuth({
         credentials: {
           client_email: process.env.GDRIVE_CLIENT_EMAIL,
@@ -1478,7 +1483,6 @@ exports.getPromotionalChildrenBySlug = async (req, res) => {
       });
 
       const drive = google.drive({ version: "v3", auth });
-
       const result = await drive.files.list({
         q: `'${parent.driveFolderId}' in parents and trashed = false`,
         fields: "files(id, name, mimeType, thumbnailLink)",
@@ -1487,7 +1491,7 @@ exports.getPromotionalChildrenBySlug = async (req, res) => {
       children = result.data.files.map((file) => ({
         type: file.mimeType.startsWith("image/") ? "image" : "video",
         title: file.name,
-        url: file.id, // fileId used to stream/download
+        url: file.id,
         thumbnail: file.thumbnailLink,
       }));
     } else {

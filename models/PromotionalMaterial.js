@@ -24,7 +24,7 @@ const promotionalMaterialSchema = new mongoose.Schema(
 
     type: {
       type: String,
-      enum: ["folder", "video", "image"],
+      enum: ["folder", "video", "image", "pdf"],
       default: "folder",
     },
 
@@ -43,7 +43,7 @@ const promotionalMaterialSchema = new mongoose.Schema(
       enum: ["published", "draft"],
       default: "published",
     },
-
+    driveFolderId: { type: String },
     isFeatured: {
       type: Boolean,
       default: false,

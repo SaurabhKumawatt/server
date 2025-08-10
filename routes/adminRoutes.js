@@ -45,7 +45,9 @@ const {
   deleteInvoiceOrPayoutFile,
   createCampaign,
   getAllCampaigns,
-  deleteCampaign
+  deleteCampaign,
+  getAdminDashboardStats,
+  exportDashboardCSV,
 } = require("../controllers/adminController");
 
 // 🔐 Get complete user info (admin only)
@@ -169,6 +171,10 @@ router.delete(
 router.post("/target-campaign", protect, authorizeRoles("admin"), createCampaign);
 router.get("/target-campaigns", protect, authorizeRoles("admin"), getAllCampaigns);
 router.delete("/target-campaign/:id", protect, authorizeRoles("admin"), deleteCampaign);
+
+router.get("/dashboard/stats", protect, authorizeRoles("admin"), getAdminDashboardStats);
+router.get("/dashboard/export-csv", protect, authorizeRoles("admin"), exportDashboardCSV);
+
 
 
 module.exports = router;

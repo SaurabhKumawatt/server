@@ -1,6 +1,7 @@
 // /server/middleware/cloudinaryUpload.js
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const multer = require("multer");
+const path = require("path");
 const cloudinary = require("../utils/cloudinary");
 
 const profileStorage = new CloudinaryStorage({
@@ -31,12 +32,17 @@ const trainingThumbnailStorage = new CloudinaryStorage({
 });
 const webinarThumbnailStorage = new CloudinaryStorage({
   cloudinary,
-  params: {
-    folder: "stravix/webinars",
-    allowed_formats: ["jpg", "jpeg", "png", "webp"],
-    // ❌ No transformation for original quality
+  params: async (req, file) => {
+    return {
+      folder: "stravix/webinars",
+      resource_type: "image", // 📸 ensure image type
+      format: "webp", // ✅ Force conversion to .webp
+      transformation: [{ fetch_format: "webp" }], // ✅ Ensure Cloudinary applies conversion
+    };
   },
 });
+
+
 
 
 const promoMaterialStorage = new CloudinaryStorage({

@@ -49,11 +49,9 @@ exports.getUsersForPayout = async (req, res) => {
     }).populate("userId");
 
     if (!commissions.length) {
-      console.log("⚠️ No commissions found for payout.");
       return res.status(404).json({ message: "No commissions found for payout" });
     }
 
-    console.log("📊 commissions fetched:", commissions.length);
 
     // 2. Group by user
     const groupedByUser = {};
@@ -215,7 +213,6 @@ exports.approveAndGeneratePayout = async (req, res) => {
       });
 
       if (!commissions.length) {
-        console.log(`ℹ️ No commissions found for user: ${userId}`);
         continue;
       }
 
@@ -392,7 +389,7 @@ exports.uploadBankResponse = async (req, res) => {
         "Errors": errors,
       } = row;
 
-      const amount = parseFloat((amountStr || "").replace(/[^0-9.]/g, ""));
+      const amount = parseFloat((amountStr || "").toString().replace(/[^0-9.]/g, ""));
       if (isNaN(amount)) {
         console.warn(`❌ Skipping row due to invalid amount: ${amountStr}`);
         continue;
@@ -426,7 +423,7 @@ exports.uploadBankResponse = async (req, res) => {
 
       console.log(`✅ Payout matched: ${payout._id}`);
 
-     
+
       payout.transactionType = type;
       const parsedTxnDate = moment(txnDate, "DD/MM/YYYY", true);
       if (!parsedTxnDate.isValid()) {
@@ -609,7 +606,7 @@ const generateToken = (id) => {
 // ✅ Get All Users Summary for Admin Dashboard
 exports.getAllUserSummaries = async (req, res) => {
   try {
-    const users = await User.find().populate("enrolledCourses.course", "title");
+    const users = await User.find().populate("enrolledCourses.course", "title price isBundle");
     const { determineAffiliateLevel } = require("../utils/levelsFn");
 
     const results = await Promise.all(
@@ -636,13 +633,22 @@ exports.getAllUserSummaries = async (req, res) => {
           ? await User.findOne({ affiliateCode: user.sponsorCode })
           : null;
 
+        const highestPricedBundle = (user.enrolledCourses || [])
+          .map(ec => ec.course)
+          .filter(c => {
+            return c && c.isBundle && c.price;
+          })
+          .reduce((max, course) => (course.price > max.price ? course : max), { price: 0 });
+
+
+
         return {
           userId: user.affiliateCode,
           name: user.fullName,
           mobile: user.mobileNumber,
           email: user.email,
           role: user.role,
-          enrolledBundles: user.enrolledCourses.map((ec) => ec.course?.title),
+          enrolledBundles: highestPricedBundle ? highestPricedBundle.title : null,
           sponsorId: user.sponsorCode || "N/A",
           sponsorName: sponsor?.fullName || "N/A",
           industryEarning: totalIndustryEarning,
@@ -1069,59 +1075,66 @@ exports.getAllWebinars = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 exports.createOrUpdatePromotionalMaterial = async (req, res) => {
   try {
     const {
       _id,
       title,
       parent,
-      type,
+      type = "folder", // ✅ default
       url,
       status,
       isFeatured,
+      driveFolderId: driveFolderIdBody, // ✅ accept from body too
     } = req.body;
 
-    const data = {
-      title,
-      parent: parent || null,
-      type,
-      status,
-      isFeatured,
+    const data = { title, parent: parent || null, type, status, isFeatured };
+
+    // 🔎 universal extractor (URL or ID)
+    const extractId = (input = "") => {
+      if (!input) return "";
+      const m1 = input.match(/folders\/([A-Za-z0-9_-]{10,})/);
+      const m2 = input.match(/(?:\/d\/|id=)([A-Za-z0-9_-]{10,})/);
+      if (m1) return m1[1];
+      if (m2) return m2[1];
+      if (/^[A-Za-z0-9_-]{10,}$/.test(input)) return input;
+      return "";
     };
 
-    // Drive video: set url directly
-    if (type === "video" && url) {
-      data.url = url;
+    // 📁 folder
+    if (type === "folder" || type === "pdf") {
+      const id = extractId(url) || extractId(driveFolderIdBody);
+      if (id) data.driveFolderId = id;                // ✅ always set if found
+      if (url) data.url = url;                        // keep original url if provided
     }
 
-    // Image or folder: use uploaded thumbnail
+    // 🎥 video
+    if (type === "video" && url) data.url = url;
+
+    // 🖼 image
     if (type === "image") {
-      if (req.file && req.file.path) {
-        // Uploaded to Cloudinary
+      if (req.file?.path) {
         data.url = req.file.path;
       } else if (url) {
-        // Provided as Drive link (raw ID or full URL)
-        const driveIdMatch = url.match(/(?:\/d\/|id=)([a-zA-Z0-9_-]{10,})/);
-        const driveId = driveIdMatch ? driveIdMatch[1] : url; // fallback to raw ID
-        data.url = `https://drive.google.com/uc?export=view&id=${driveId}`;
+        const id = extractId(url);
+        data.url = id ? `https://drive.google.com/uc?export=view&id=${id}` : url;
       }
-    } else if (type === "folder" && req.file && req.file.path) {
-      // Folder thumbnail upload
-      data.thumbnail = req.file.path;
     }
 
-    // Cloudinary thumbnail if folder
-    if (type === "folder" && req.file && req.file.path) {
+    // 🖼 thumbnail for folder/pdf
+    if ((type === "folder" || type === "pdf") && req.file?.path) {
       data.thumbnail = req.file.path;
     }
 
     let result;
-    if (slug) {
-      result = await PromotionalMaterial.findOneAndUpdate({ slug }, data, { new: true });
+    if (_id) {
+      result = await PromotionalMaterial.findByIdAndUpdate(_id, data, { new: true });
     } else {
-      // on creation, generate unique slug
-      const generatedSlug = title.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
-      data.slug = generatedSlug + "-" + uuidv4().slice(0, 6);
+      const baseSlug = title.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      let slug = baseSlug, i = 1;
+      while (await PromotionalMaterial.findOne({ slug })) slug = `${baseSlug}-${i++}`;
+      data.slug = slug;
       result = await PromotionalMaterial.create(data);
     }
 
@@ -1130,6 +1143,8 @@ exports.createOrUpdatePromotionalMaterial = async (req, res) => {
     res.status(400).json({ message: "Operation failed", error: err.message });
   }
 };
+
+
 
 
 exports.deletePromotionalMaterial = async (req, res) => {
@@ -1149,13 +1164,15 @@ exports.getAllPromotionalFolders = async (req, res) => {
       type: "folder"
     })
       .sort({ createdAt: -1 })
-      .select("title slug parent status isFeatured createdAt");
+      .select("title slug driveFolderId thumbnail url parent status isFeatured createdAt")
+      .populate("parent", "title slug"); // ✅ Parent ka title & slug populate
 
     res.json(folders);
   } catch (err) {
     res.status(500).json({ message: "Failed to fetch folders", error: err.message });
   }
 };
+
 
 
 const getMonthlyTDSReport = async (month) => {
@@ -1356,7 +1373,7 @@ exports.exportInvoiceSheet = async (req, res) => {
       const course = p.forBundleCourseId;
       if (!user || !course) continue;
 
-      const price = course.discountedPrice || course.price || 0;
+      const price = p.amountPaid || 0;
       const taxableAmount = +(price / 1.18).toFixed(2);
 
       const isDelhi =
@@ -1473,5 +1490,122 @@ exports.deleteCampaign = async (req, res) => {
     res.json({ message: "Campaign deleted successfully" });
   } catch (err) {
     res.status(500).json({ message: "Delete failed", error: err.message });
+  }
+};
+
+
+exports.getAdminDashboardStats = async (req, res) => {
+  try {
+    const { filter } = req.query;
+
+    let startDate = new Date();
+    switch (filter) {
+      case "weekly":
+        startDate.setDate(startDate.getDate() - 7);
+        break;
+      case "monthly":
+        startDate.setDate(startDate.getDate() - 30);
+        break;
+      default:
+        startDate.setHours(0, 0, 0, 0);
+    }
+
+    const [dbPayments, payouts] = await Promise.all([
+      Payment.find({ createdAt: { $gte: startDate }, status: "captured" }),
+      Payout.find({ createdAt: { $gte: startDate }, status: "paid" }),
+    ]);
+
+    let totalEarning = 0;
+    let verifiedUnits = 0;
+
+    for (const dbPayment of dbPayments) {
+      const { razorpayOrderId, razorpayPaymentId, amountPaid } = dbPayment;
+
+      if (!razorpayOrderId || !razorpayPaymentId) continue;
+
+      try {
+        // Fetch all payments under this order
+        const orderPayments = await razorpay.orders.fetchPayments(razorpayOrderId);
+
+        const verified = orderPayments.items.find(
+          (p) => p.id === razorpayPaymentId && p.status === "captured"
+        );
+
+        if (verified) {
+          totalEarning += amountPaid || 0;
+          verifiedUnits += 1;
+        }
+      } catch (err) {
+        console.warn(`❌ Razorpay check failed for order ${razorpayOrderId}`);
+      }
+    }
+
+    const payout = payouts.reduce((sum, p) => sum + (p.totalAmount || 0), 0);
+    const gst = parseFloat((totalEarning * 0.18).toFixed(2));
+    const tds = parseFloat((totalEarning * 0.02).toFixed(2));
+    const profit = parseFloat((totalEarning - gst - tds - payout).toFixed(2));
+
+    res.json({
+      earning: totalEarning,
+      units: verifiedUnits,
+      payout,
+      gst,
+      tds,
+      profit,
+    });
+  } catch (err) {
+    console.error("Dashboard Stats Error:", err);
+    res.status(500).json({ message: "Failed to fetch stats" });
+  }
+};
+
+
+
+exports.exportDashboardCSV = async (req, res) => {
+  try {
+    const { filter } = req.query;
+    let startDate = new Date();
+    switch (filter) {
+      case "weekly":
+        startDate.setDate(startDate.getDate() - 7);
+        break;
+      case "monthly":
+        startDate.setDate(startDate.getDate() - 30);
+        break;
+      default:
+        startDate.setHours(0, 0, 0, 0);
+    }
+
+    const payments = await Payment.find({ createdAt: { $gte: startDate }, status: "success" });
+    const enrollments = await Enrollments.find({ createdAt: { $gte: startDate }, status: "active" });
+    const payouts = await Payout.find({ createdAt: { $gte: startDate }, status: "paid" });
+
+    const earning = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const units = enrollments.length;
+    const payout = payouts.reduce((sum, p) => sum + (p.totalAmount || 0), 0);
+    const tds = payouts.reduce((sum, p) => sum + (p.tds?.amount || 0), 0);
+    const gst = parseFloat((earning * 0.18).toFixed(2));
+    const profit = earning - payout - gst - tds;
+
+    const fields = ["Date Range", "Earning", "Units", "Payout", "GST", "TDS", "Profit"];
+    const parser = new Parser({ fields });
+    const csv = parser.parse([
+      {
+        "Date Range": `${startDate.toISOString().split("T")[0]} to ${new Date().toISOString().split("T")[0]}`,
+        Earning: earning,
+        Units: units,
+        Payout: payout,
+        GST: gst,
+        TDS: tds,
+        Profit: profit,
+      },
+    ]);
+
+    res.header("Content-Type", "text/csv");
+    res.attachment(`stravix-dashboard-${filter}.csv`);
+    res.send(csv);
+  } catch (err) {
+    console.error("CSV Export Error:", err);
+    res.status(500).json({ message: "Failed to export CSV" });
   }
 };

@@ -25,7 +25,7 @@ const ReelIdea = require("../models/ReelIdea");
 const PromotionalMaterial = require("../models/PromotionalMaterial");
 const Enrollments = require("../models/Enrollments")
 const TargetMilestone = require("../models/TargetMilestone");
-
+const { google } = require("googleapis");
 
 
 // Generate JWT Token
@@ -1465,15 +1465,43 @@ exports.getPromotionalChildrenBySlug = async (req, res) => {
       return res.status(404).json({ message: "Promotional Material not found" });
     }
 
-    // 🧾 2. Find all children under it (folder + video/image assets)
-    const children = await PromotionalMaterial.find({
-      parent: parent._id,
-      status: "published",
-    }).sort({ type: 1, createdAt: -1 }); // type = folder first, then assets
+    // 🔁 2. If driveFolderId is available, fetch assets from Google Drive
+    let children = [];
 
-    res.json({ parent, children });
+    if (parent.driveFolderId) {
+      const auth = new google.auth.GoogleAuth({
+        credentials: {
+          client_email: process.env.GDRIVE_CLIENT_EMAIL,
+          private_key: process.env.GDRIVE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+        },
+        scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+      });
+
+      const drive = google.drive({ version: "v3", auth });
+
+      const result = await drive.files.list({
+        q: `'${parent.driveFolderId}' in parents and trashed = false`,
+        fields: "files(id, name, mimeType, thumbnailLink)",
+      });
+
+      children = result.data.files.map((file) => ({
+        type: file.mimeType.startsWith("image/") ? "image" : "video",
+        title: file.name,
+        url: file.id, // fileId used to stream/download
+        thumbnail: file.thumbnailLink,
+      }));
+    } else {
+      // 📁 3. If not using drive, fallback to DB children (if any)
+      children = await PromotionalMaterial.find({
+        parent: parent._id,
+        status: "published",
+      }).sort({ type: 1, createdAt: -1 });
+    }
+
+    return res.status(200).json({ parent, children });
   } catch (err) {
-    res.status(500).json({
+    console.error("❌ Error in getPromotionalChildrenBySlug:", err.message);
+    return res.status(500).json({
       message: "Failed to fetch promotional material children",
       error: err.message,
     });
@@ -1563,8 +1591,8 @@ exports.getTargetProgress = async (req, res) => {
       { target: 300000, label: "₹3L+ Rewards" },
       { target: 200000, label: "₹2L+ Rewards" },
       { target: 100000, label: "₹1L+ Rewards" },
-      { target: 50000,  label: "₹50K+ Rewards" },
-      { target: 0,       label: "Below ₹50K" },
+      { target: 50000, label: "₹50K+ Rewards" },
+      { target: 0, label: "Below ₹50K" },
     ];
 
     const currentTier = tiers.find(t => total >= t.target);

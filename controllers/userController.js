@@ -26,6 +26,10 @@ const PromotionalMaterial = require("../models/PromotionalMaterial");
 const Enrollments = require("../models/Enrollments")
 const TargetMilestone = require("../models/TargetMilestone");
 const { google } = require("googleapis");
+const { GetObjectCommand } = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+const uploadDriveFileToR2 = require("../utils/driveToR2");
+const r2 = require("../utils/r2");
 
 
 // Generate JWT Token
@@ -1457,6 +1461,54 @@ exports.getPromotionalRootFolders = async (req, res) => {
 };
 
 exports.getPromotionalChildrenBySlug = async (req, res) => {
+  try {
+    const parent = await PromotionalMaterial.findOne({ slug: req.params.slug });
+    if (!parent) return res.status(404).json({ message: "Not found" });
+
+    let children = [];
+
+    if (parent.driveFolderId) {
+      const auth = new google.auth.GoogleAuth({
+        credentials: {
+          client_email: process.env.GDRIVE_CLIENT_EMAIL,
+          private_key: (process.env.GDRIVE_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
+        },
+        scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+      });
+      const drive = google.drive({ version: "v3", auth });
+      const result = await drive.files.list({
+        q: `'${parent.driveFolderId}' in parents and trashed = false`,
+        fields: "files(id, name, mimeType, thumbnailLink)",
+      });
+
+      children = await Promise.all(result.data.files.map(async (file) => {
+        // Upload to R2 if not already stored
+        const r2Key = await uploadDriveFileToR2(file.id, file.name);
+
+        // Generate signed URL for frontend
+        const signedUrl = await getSignedUrl(
+          r2,
+          new GetObjectCommand({ Bucket: process.env.R2_BUCKET_NAME, Key: r2Key }),
+          { expiresIn: 3600 }
+        );
+
+        return {
+          type: file.mimeType.startsWith("image/") ? "image" : "video",
+          title: file.name,
+          url: signedUrl,
+          thumbnail: file.thumbnailLink,
+        };
+      }));
+    }
+
+    res.json({ parent, children });
+  } catch (err) {
+    console.error("❌ Error in getPromotionalChildrenBySlug:", err);
+    res.status(500).json({ message: "Failed to fetch materials" });
+  }
+};
+
+exports.getPromotionalChildrenByCat = async (req, res) => {
   try {
     // 🧭 1. Find parent folder by slug
     const parent = await PromotionalMaterial.findOne({ slug: req.params.slug });

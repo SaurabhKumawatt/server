@@ -1160,18 +1160,17 @@ exports.deletePromotionalMaterial = async (req, res) => {
 
 exports.getAllPromotionalFolders = async (req, res) => {
   try {
-    const folders = await PromotionalMaterial.find({
-      type: "folder"
-    })
+    const materials = await PromotionalMaterial.find({})
       .sort({ createdAt: -1 })
-      .select("title slug driveFolderId thumbnail url parent status isFeatured createdAt")
+      .select("title slug type driveFolderId thumbnail url parent status isFeatured createdAt")
       .populate("parent", "title slug"); // ✅ Parent ka title & slug populate
 
-    res.json(folders);
+    res.json(materials);
   } catch (err) {
-    res.status(500).json({ message: "Failed to fetch folders", error: err.message });
+    res.status(500).json({ message: "Failed to fetch promotional materials", error: err.message });
   }
 };
+
 
 
 

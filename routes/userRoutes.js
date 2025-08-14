@@ -42,6 +42,7 @@ const {
   updateMobileNumber,
   getPromotionalRootFolders,
   getPromotionalChildrenBySlug,
+  getPromotionalChildrenByCat,
   trackCourseUsage,
   getTargetProgress,
   getUserTargetCampaigns
@@ -185,6 +186,7 @@ router.get("/leaderboard", protect, getLeaderboard);
 router.get("/my-rank-nearby", protect, authorizeRoles("paid-affiliate", "admin"), getMyNearbyRank);
 router.get("/marketing/promotional", protect, authorizeRoles("paid-affiliate", "admin"), getPromotionalRootFolders);
 router.get("/marketing/promotional/:slug", protect, authorizeRoles("paid-affiliate", "admin"), getPromotionalChildrenBySlug);
+router.get("/marketing/promotional-cat/:slug", protect, authorizeRoles("paid-affiliate", "admin"), getPromotionalChildrenByCat);
 router.put("/track-usage", protect, authorizeRoles("paid-affiliate", "admin"), trackCourseUsage);
 
 

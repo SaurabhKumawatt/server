@@ -5,6 +5,7 @@
 /dist
 /build
 /uploads
+/scripts
 
 # environment variables
 .env

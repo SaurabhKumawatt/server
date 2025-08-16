@@ -1,7 +1,7 @@
 // routes/promotionalRoutes.js
 const express = require("express");
 const router = express.Router();
-const { streamPromotionalFile } = require("../controllers/promotionalController");
+const { streamPromotionalFile, syncDriveFolder } = require("../controllers/promotionalController");
 const { protect } = require("../middleware/auth");
 const { authorizeRoles } = require("../middleware/roles");
 const axios = require("axios");
@@ -24,5 +24,12 @@ router.get("/download", async (req, res) => {
         res.status(500).send("Failed to download");
     }
 });
+
+router.post(
+  "/marketing/promotional/sync",
+  protect,
+  authorizeRoles("admin"),
+  syncDriveFolder
+);
 
 module.exports = router;

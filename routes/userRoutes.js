@@ -45,7 +45,8 @@ const {
   getPromotionalChildrenByCat,
   trackCourseUsage,
   getTargetProgress,
-  getUserTargetCampaigns
+  getUserTargetCampaigns,
+  getUserTotalWatchTime
 } = require("../controllers/userController");
 
 // 🔐 Middlewares
@@ -188,6 +189,7 @@ router.get("/marketing/promotional", protect, authorizeRoles("paid-affiliate", "
 router.get("/marketing/promotional/:slug", protect, authorizeRoles("paid-affiliate", "admin"), getPromotionalChildrenBySlug);
 router.get("/marketing/promotional-cat/:slug", protect, authorizeRoles("paid-affiliate", "admin"), getPromotionalChildrenByCat);
 router.put("/track-usage", protect, authorizeRoles("paid-affiliate", "admin"), trackCourseUsage);
+router.get("/:userId/watch-time", protect, authorizeRoles("paid-affiliate", "admin"), getUserTotalWatchTime);
 
 
 

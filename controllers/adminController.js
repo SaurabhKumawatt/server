@@ -27,6 +27,9 @@ const { determineAffiliateLevel } = require("../utils/levelsFn");
 const PromotionalMaterial = require("../models/PromotionalMaterial");
 const moment = require("moment");
 const TargetMilestone = require("../models/TargetMilestone");
+const uploadDriveFileToR2 = require("../utils/driveToR2");
+const { google } = require("googleapis");
+
 
 
 
@@ -1075,23 +1078,22 @@ exports.getAllWebinars = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-
 exports.createOrUpdatePromotionalMaterial = async (req, res) => {
   try {
     const {
       _id,
       title,
       parent,
-      type = "folder", // ✅ default
+      type = "folder",
       url,
       status,
       isFeatured,
-      driveFolderId: driveFolderIdBody, // ✅ accept from body too
+      driveFolderId: driveFolderIdBody,
     } = req.body;
 
     const data = { title, parent: parent || null, type, status, isFeatured };
 
-    // 🔎 universal extractor (URL or ID)
+    // extract Drive folder ID
     const extractId = (input = "") => {
       if (!input) return "";
       const m1 = input.match(/folders\/([A-Za-z0-9_-]{10,})/);
@@ -1102,29 +1104,9 @@ exports.createOrUpdatePromotionalMaterial = async (req, res) => {
       return "";
     };
 
-    // 📁 folder
-    if (type === "folder" || type === "pdf") {
+    if (type === "folder") {
       const id = extractId(url) || extractId(driveFolderIdBody);
-      if (id) data.driveFolderId = id;                // ✅ always set if found
-      if (url) data.url = url;                        // keep original url if provided
-    }
-
-    // 🎥 video
-    if (type === "video" && url) data.url = url;
-
-    // 🖼 image
-    if (type === "image") {
-      if (req.file?.path) {
-        data.url = req.file.path;
-      } else if (url) {
-        const id = extractId(url);
-        data.url = id ? `https://drive.google.com/uc?export=view&id=${id}` : url;
-      }
-    }
-
-    // 🖼 thumbnail for folder/pdf
-    if ((type === "folder" || type === "pdf") && req.file?.path) {
-      data.thumbnail = req.file.path;
+      if (id) data.driveFolderId = id;
     }
 
     let result;
@@ -1138,8 +1120,44 @@ exports.createOrUpdatePromotionalMaterial = async (req, res) => {
       result = await PromotionalMaterial.create(data);
     }
 
+    // 🔥 Drive → R2 Sync here
+    if (result.driveFolderId) {
+      const auth = new google.auth.GoogleAuth({
+        credentials: {
+          client_email: process.env.GDRIVE_CLIENT_EMAIL,
+          private_key: (process.env.GDRIVE_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
+        },
+        scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+      });
+      const drive = google.drive({ version: "v3", auth });
+
+      const driveFiles = await drive.files.list({
+        q: `'${result.driveFolderId}' in parents and trashed = false`,
+        fields: "files(id, name, mimeType, thumbnailLink)",
+      });
+
+      for (const file of driveFiles.data.files) {
+        const r2Key = await uploadDriveFileToR2(file.id, file.name);
+
+        // 🗃️ Save in DB as child material
+        await PromotionalMaterial.updateOne(
+          { driveFolderId: file.id },
+          {
+            title: file.name,
+            parent: result._id,
+            type: file.mimeType.startsWith("image/") ? "image" : "video",
+            url: r2Key,
+            thumbnail: file.thumbnailLink,
+            status: "published",
+          },
+          { upsert: true }
+        );
+      }
+    }
+
     res.status(200).json(result);
   } catch (err) {
+    console.error("❌ Admin create/update error:", err);
     res.status(400).json({ message: "Operation failed", error: err.message });
   }
 };

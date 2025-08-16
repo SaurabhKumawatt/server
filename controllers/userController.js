@@ -1481,30 +1481,53 @@ exports.getPromotionalChildrenBySlug = async (req, res) => {
         fields: "files(id, name, mimeType, thumbnailLink)",
       });
 
-      children = await Promise.all(result.data.files.map(async (file) => {
-        // Upload to R2 if not already stored
-        const r2Key = await uploadDriveFileToR2(file.id, file.name);
+      // ⚡ Parallel upload checks but limited concurrency
+      children = await Promise.all(
+        result.data.files.map(async (file) => {
+          try {
+            const key = `promotional/${file.id}-${file.name}`;
 
-        // Generate signed URL for frontend
-        const signedUrl = await getSignedUrl(
-          r2,
-          new GetObjectCommand({ Bucket: process.env.R2_BUCKET_NAME, Key: r2Key }),
-          { expiresIn: 3600 }
-        );
+            // Step 1: Check if file exists in R2
+            let existsInR2 = true;
+            try {
+              await r2.send(new HeadObjectCommand({ Bucket: process.env.R2_BUCKET_NAME, Key: key }));
+            } catch (err) {
+              existsInR2 = false;
+            }
 
-        return {
-          type: file.mimeType.startsWith("image/") ? "image" : "video",
-          title: file.name,
-          url: signedUrl,
-          thumbnail: file.thumbnailLink,
-        };
-      }));
+            // Step 2: Upload if not exists
+            if (!existsInR2) {
+              await uploadDriveFileToR2(file.id, file.name);
+            }
+
+            // Step 3: Signed URL
+            const signedUrl = await getSignedUrl(
+              r2,
+              new GetObjectCommand({ Bucket: process.env.R2_BUCKET_NAME, Key: key }),
+              { expiresIn: 3600 }
+            );
+
+            return {
+              type: file.mimeType.startsWith("image/") ? "image" : "video",
+              title: file.name,
+              url: signedUrl,
+              thumbnail: file.thumbnailLink,
+            };
+          } catch (err) {
+            console.error(`❌ Failed processing file ${file.name}:`, err.message);
+            return null;
+          }
+        })
+      );
+
+      // remove nulls
+      children = children.filter(Boolean);
     }
 
     res.json({ parent, children });
   } catch (err) {
-    console.error("❌ Error in getPromotionalChildrenBySlug:", err);
-    res.status(500).json({ message: "Failed to fetch materials" });
+    console.error("❌ Error in getPromotionalChildrenBySlug:", err.message);
+    res.status(500).json({ message: "Failed to fetch materials", error: err.message });
   }
 };
 
@@ -1674,5 +1697,34 @@ exports.getUserTargetCampaigns = async (req, res) => {
     res.json(campaigns);
   } catch (err) {
     res.status(500).json({ message: "Failed to load campaigns", error: err.message });
+  }
+};
+
+exports.getUserTotalWatchTime = async (req, res) => {
+  try {
+    const userId = req.params.userId || req.user._id;
+
+    const result = await Enrollments.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(userId) } }, // ✅ FIXED
+      { $unwind: "$videoWatchLogs" },
+      {
+        $group: {
+          _id: null,
+          totalSeconds: { $sum: "$videoWatchLogs.duration" }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          totalMinutes: { $round: [{ $divide: ["$totalSeconds", 60] }, 2] }
+        }
+      }
+    ]);
+
+    const totalMinutes = result.length > 0 ? result[0].totalMinutes : 0;
+    res.json({ totalMinutes });
+  } catch (error) {
+    console.error("Error fetching watch time:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };

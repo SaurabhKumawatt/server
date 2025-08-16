@@ -1660,8 +1660,8 @@ exports.getTargetProgress = async (req, res) => {
     const commissions = await Commissions.find({
       userId,
       createdAt: { $gte: start, $lt: end },
-      status: { $in: ["approved", "paid"] },
     });
+
 
     const total = commissions.reduce((sum, c) => sum + c.amount, 0);
 

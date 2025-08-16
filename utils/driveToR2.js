@@ -50,7 +50,7 @@ async function uploadDriveFileToR2(fileId, fileName) {
 
   const key = `promotional/${fileId}-${fileName}`;
   if (await fileExistsInR2(key)) {
-    console.log(`✅ Skipping upload, already exists: ${key}`);
+    // console.log(`✅ Skipping upload, already exists: ${key}`);
     return key;
   }
 
@@ -59,7 +59,7 @@ async function uploadDriveFileToR2(fileId, fileName) {
     { responseType: "stream" }
   );
 
-  console.log(`⬆️ Converting stream to buffer: ${fileName} (${meta.data.size} bytes)`);
+  // console.log(`⬆️ Converting stream to buffer: ${fileName} (${meta.data.size} bytes)`);
   const buffer = await streamToBuffer(fileRes.data);
 
   await r2.send(new PutObjectCommand({
@@ -69,7 +69,7 @@ async function uploadDriveFileToR2(fileId, fileName) {
     ContentType: meta.data.mimeType,
   }));
 
-  console.log(`☁ Uploaded to R2: ${key}`);
+  // console.log(`☁ Uploaded to R2: ${key}`);
   return key;
 }
 

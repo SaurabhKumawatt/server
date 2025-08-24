@@ -46,7 +46,8 @@ const {
   trackCourseUsage,
   getTargetProgress,
   getUserTargetCampaigns,
-  getUserTotalWatchTime
+  getUserTotalWatchTime,
+  getEarningsByDate
 } = require("../controllers/userController");
 
 // 🔐 Middlewares
@@ -218,4 +219,10 @@ router.get("/stravix/:videoId", (req, res) => {
   res.redirect(url);
 });
 
+
+router.get("/earnings-by-date", protect, authorizeRoles("paid-affiliate", "admin"), getEarningsByDate);
+
+
 module.exports = router;
+
+

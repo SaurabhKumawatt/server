@@ -1728,3 +1728,36 @@ exports.getUserTotalWatchTime = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+
+
+exports.getEarningsByDate = async (req, res) => {
+  try {
+    const { date } = req.query;
+    if (!date) {
+      return res.status(400).json({ message: "Date is required (YYYY-MM-DD)" });
+    }
+
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(date);
+    end.setHours(23, 59, 59, 999);
+
+    const commissions = await Commissions.find({
+      userId: req.user._id,
+      createdAt: { $gte: start, $lte: end },
+    });
+
+    const total = commissions.reduce((sum, c) => sum + c.amount, 0);
+
+    return res.status(200).json({
+      date,
+      totalEarning: total,
+      commissions,
+    });
+  } catch (err) {
+    console.error("❌ Error fetching earnings by date:", err);
+    return res.status(500).json({ message: "Server error while fetching earnings" });
+  }
+};

@@ -4,7 +4,7 @@ const { sendBirthdayEmail } = require("../utils/email");
 
 const birthdayCron = () => {
   cron.schedule(
-    "38 23 * * *",
+    "0 0 * * *",
     async () => {
       try {
         const now = new Date();

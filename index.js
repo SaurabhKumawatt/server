@@ -8,6 +8,7 @@ const cookieParser = require("cookie-parser");
 const compression = require("compression");
 const path = require("path");
 const { protect } = require("./middleware/auth");
+const birthdayCron = require("./cron/birthdayCron"); 
 
 dotenv.config({
   path: process.env.NODE_ENV === "production" ? ".env.production" : ".env.local",
@@ -140,3 +141,4 @@ app.listen(PORT, () => {
 
 require("./cron/monthlyTDSJob");
 require("./cron/invoiceCron");
+birthdayCron();

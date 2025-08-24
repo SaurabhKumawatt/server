@@ -10,7 +10,7 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const fs = require("fs");
 const path = require("path");
-const { sendWelcomeEmail, sendUpdateOtpEmail, sendEmailUpdatedConfirmation } = require("../utils/email");
+const { sendWelcomeEmail, sendUpdateOtpEmail, sendEmailUpdatedConfirmation, sendMobileUpdatedConfirmation } = require("../utils/email");
 const { sendOtpEmail, sendMobileUpdateOtpEmail } = require("../utils/email");
 const { validationResult } = require("express-validator");
 const { Types } = require("mongoose");
@@ -1438,7 +1438,10 @@ exports.updateMobileNumber = async (req, res) => {
 
     user.mobileNumber = newMobile;
     await user.save();
-
+    await sendMobileUpdatedConfirmation({
+      name: user.fullName,
+      to: user.email,
+    });
     res.json({ message: "Mobile number updated", mobileNumber: newMobile });
   } catch (err) {
     console.error("Mobile update error:", err);

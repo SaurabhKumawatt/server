@@ -12,7 +12,7 @@ const mongoose = require("mongoose");
 const Payout = require("../models/Payout");
 const Training = require("../models/Training");
 const jwt = require("jsonwebtoken");
-const { sendPayoutSuccessEmail, sendPayoutFailureEmail } = require("../utils/email");
+const { sendPayoutSuccessEmail, sendPayoutFailureEmail, sendKycApprovalEmail, sendKycRejectionEmail } = require("../utils/email");
 const { decrypt } = require("../utils/encrypt");
 const bcrypt = require("bcryptjs");
 const { sendWelcomeEmail } = require("../utils/email");
@@ -769,7 +769,7 @@ exports.getPendingKycs = async (req, res) => {
 
 
 
-// adminController.js
+
 exports.updateKycStatus = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -782,6 +782,10 @@ exports.updateKycStatus = async (req, res) => {
       { new: true }
     );
 
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
     // ✅ 2. Update only the rejection reason in UserKyc
     const kyc = await UserKyc.findOneAndUpdate(
       { userId },
@@ -790,6 +794,17 @@ exports.updateKycStatus = async (req, res) => {
       },
       { new: true }
     );
+
+    // ✅ 3. Send Email Notification
+    try {
+      if (status === "approved") {
+        await sendKycApprovalEmail({ to: user.email, name: user.fullName });
+      } else if (status === "rejected") {
+        await sendKycRejectionEmail({ to: user.email, name: user.fullName, reason });
+      }
+    } catch (mailErr) {
+      console.error("📭 KYC email send error:", mailErr.message);
+    }
 
     res.status(200).json({
       message: `✅ KYC ${status}`,
@@ -801,6 +816,7 @@ exports.updateKycStatus = async (req, res) => {
     res.status(500).json({ message: "Failed to update KYC status" });
   }
 };
+
 
 
 exports.bulkRegisterAndEnrollWithRelations = async (req, res) => {
@@ -1624,5 +1640,49 @@ exports.exportDashboardCSV = async (req, res) => {
   } catch (err) {
     console.error("CSV Export Error:", err);
     res.status(500).json({ message: "Failed to export CSV" });
+  }
+};
+
+
+// 📊 Sales & Profit Summary (Admin Dashboard)
+exports.getSalesSummary = async (req, res) => {
+  try {
+    const { from, to } = req.query;
+
+    const start = from ? new Date(from) : new Date(new Date().getFullYear(), 0, 1);
+    const end = to ? new Date(to) : new Date();
+
+    // 1️⃣ Fetch Razorpay captured payments
+    const payments = await Payment.find({
+      status: "captured",
+      createdAt: { $gte: start, $lte: end }
+    }).lean();
+
+    // 2️⃣ Aggregate
+    const summary = payments.map(p => {
+      const totalSale = p.amountPaid;
+      const gst = +(totalSale * 0.18).toFixed(2);
+      const tds = +(totalSale * 0.02).toFixed(2);
+      const payout = totalSale - tds;
+      const profit = totalSale - gst - tds;
+
+      const date = new Date(p.createdAt);
+      return {
+        month: date.toLocaleString("default", { month: "long" }),
+        week: `W${Math.ceil(date.getDate() / 7)}`,
+        date: date.toLocaleDateString("en-IN"),
+        day: date.toLocaleDateString("en-IN", { weekday: "long" }),
+        totalSale,
+        gst,
+        tds,
+        payout,
+        profit
+      };
+    });
+
+    res.json(summary);
+  } catch (err) {
+    console.error("❌ getSalesSummary error:", err);
+    res.status(500).json({ message: "Failed to fetch sales summary" });
   }
 };

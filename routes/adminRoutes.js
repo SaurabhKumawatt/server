@@ -48,6 +48,7 @@ const {
   deleteCampaign,
   getAdminDashboardStats,
   exportDashboardCSV,
+  getSalesSummary
 } = require("../controllers/adminController");
 
 // 🔐 Get complete user info (admin only)
@@ -141,6 +142,8 @@ router.get(
   authorizeRoles("admin"),
   getAllPromotionalFolders
 );
+
+router.get("/sales-summary", protect, authorizeRoles("admin"), getSalesSummary);
 
 
 

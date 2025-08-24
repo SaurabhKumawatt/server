@@ -22,7 +22,7 @@ exports.sendWelcomeEmail = async ({ to, name }) => {
        <div style="width: 100%; margin: auto; font-family: Arial, sans-serif; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
         <!-- Header -->
         <div style="background-color: #182432; padding: 20px; text-align: center; color: #fff;">
-          <img src="https://www.stravix.in/assets/logos/Stravix-logo.svg" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
+          <img src="https://www.stravix.in/assets/logos/stravix%20300%20by%20100.png" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
           <h2 style="margin: 0; font-size: 12px;">Where Skills Meet Success</h2>
           <h2 style="margin: 0; font-size: 22px;">Welcome to StraviX!</h2>
         </div>
@@ -78,7 +78,7 @@ exports.sendCommissionEmail = async ({ to, name, referredUser, courseTitle }) =>
       <div style="width: 100%; margin: auto; font-family: Arial, sans-serif; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
         <!-- Header -->
         <div style="background-color: #182432; padding: 20px; text-align: center; color: #fff;">
-          <img src="https://www.stravix.in/assets/logos/Stravix-logo.svg" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
+          <img src="https://www.stravix.in/assets/logos/stravix%20300%20by%20100.png" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
           <h2 style="margin: 0; font-size: 12px;">Where Skills Meet Success</h2>
           <h2 style="margin: 0; font-size: 22px;">Referral Update</h2>
         </div>
@@ -125,7 +125,7 @@ exports.sendOtpEmail = async ({ name, to, otp }) => {
        <div style="width: 100%; margin: auto; font-family: Arial, sans-serif; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
   <!-- Header -->
   <div style="background-color: #182432; padding: 20px; text-align: center; color: #fff;">
-    <img src="https://www.stravix.in/assets/logos/Stravix-logo.svg" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
+    <img src="https://www.stravix.in/assets/logos/stravix%20300%20by%20100.png" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
     <h2 style="margin: 0; font-size: 12px;">Where Skills Meet Success</h2>
     <h2 style="margin: 0; font-size: 22px;">Password Reset Request</h2>
   </div>
@@ -178,7 +178,7 @@ exports.sendPayoutSuccessEmail = async ({ to, name, totalAmount, tdsAmount, netA
       <div style="width: 100%; margin: auto; font-family: Arial, sans-serif; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
         <!-- Header -->
         <div style="background-color: #182432; padding: 20px; text-align: center; color: #fff;">
-          <img src="https://www.stravix.in/assets/logos/Stravix-logo.svg" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
+          <img src="https://www.stravix.in/assets/logos/stravix%20300%20by%20100.png" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
           <h2 style="margin: 0; font-size: 12px;">Where Skills Meet Success</h2>
           <h2 style="margin: 0; font-size: 22px;">Payout Details</h2>
         </div>
@@ -222,7 +222,7 @@ exports.sendPayoutFailureEmail = async ({ to, name, reason, netAmount }) => {
       <div style="width: 100%; margin: auto; font-family: Arial, sans-serif; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
         <!-- Header -->
         <div style="background-color: #182432; padding: 20px; text-align: center; color: #fff;">
-          <img src="https://www.stravix.in/assets/logos/Stravix-logo.svg" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
+          <img src="https://www.stravix.in/assets/logos/stravix%20300%20by%20100.png" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
           <h2 style="margin: 0; font-size: 12px;">Where Skills Meet Success</h2>
           <h2 style="margin: 0; font-size: 22px;">Payout Issue</h2>
         </div>
@@ -264,7 +264,7 @@ exports.sendUpdateOtpEmail = async ({ name, to, otp }) => {
         <div style="width: 100%; margin: auto; font-family: Arial, sans-serif; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
           <!-- Header -->
           <div style="background-color: #182432; padding: 20px; text-align: center; color: #fff;">
-            <img src="https://www.stravix.in/assets/logos/Stravix-logo.svg" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
+            <img src="https://www.stravix.in/assets/logos/stravix%20300%20by%20100.png" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
             <h2 style="margin: 0; font-size: 12px;">Where Skills Meet Success</h2>
             <h2 style="margin: 0; font-size: 22px;">OTP for Email Change</h2>
           </div>
@@ -316,7 +316,7 @@ exports.sendEmailUpdatedConfirmation = async ({ name, to }) => {
       html: `
         <div style="font-family: Arial, sans-serif;">
           <div style="background-color: #182432; padding: 20px; text-align: center; color: #fff;">
-            <img src="https://www.upthrivex.com/assets/logos/stravix 300 by 100.png" style="width: 150px;" />
+            <img src="https://www.stravix.in/assets/logos/stravix%20300%20by%20100.png" style="width: 150px;" />
             <h2>Email Update Confirmation</h2>
           </div>
           <div style="padding: 30px; background-color: #ffffff;">
@@ -342,7 +342,7 @@ exports.sendMobileUpdateOtpEmail = async ({ name, to, otp }) => {
         <div style="width: 100%; margin: auto; font-family: Arial, sans-serif; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
           <!-- Header -->
           <div style="background-color: #182432; padding: 20px; text-align: center; color: #fff;">
-            <img src="https://www.stravix.in/assets/logos/Stravix-logo.svg" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
+            <img src="https://www.stravix.in/assets/logos/stravix%20300%20by%20100.png" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
             <h2 style="margin: 0; font-size: 12px;">Where Skills Meet Success</h2>
             <h2 style="margin: 0; font-size: 22px;">OTP for Mobile Number Update</h2>
           </div>
@@ -393,7 +393,7 @@ exports.sendMobileUpdatedConfirmation = async ({ name, to }) => {
         <div style="font-family: Arial, sans-serif;">
           <!-- Header -->
           <div style="background-color: #182432; padding: 20px; text-align: center; color: #fff;">
-            <img src="https://www.upthrivex.com/assets/logos/stravix 300 by 100.png" style="width: 150px;" />
+            <img src="https://www.stravix.in/assets/logos/stravix%20300%20by%20100.png" style="width: 150px;" />
             <h2>Mobile Number Update Confirmation</h2>
           </div>
 
@@ -429,7 +429,7 @@ exports.sendKycApprovalEmail = async ({ to, name }) => {
       <div style="width: 100%; margin: auto; font-family: Arial, sans-serif; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
           <!-- Header -->
           <div style="background-color: #182432; padding: 20px; text-align: center; color: #fff;">
-            <img src="https://www.stravix.in/assets/logos/Stravix-logo.svg" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
+            <img src="https://www.stravix.in/assets/logos/stravix%20300%20by%20100.png" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
             <h2 style="margin: 0; font-size: 12px;">Where Skills Meet Success</h2>
             <h2 style="margin: 0; font-size: 22px;">KYC Approved – Get Ready for Seamless Payouts</h2>
           </div>
@@ -466,7 +466,7 @@ exports.sendKycRejectionEmail = async ({ to, name, reason }) => {
       <div style="width: 100%; margin: auto; font-family: Arial, sans-serif; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
   <!-- Header -->
   <div style="background-color: #182432; padding: 20px; text-align: center; color: #fff;">
-    <img src="https://www.stravix.in/assets/logos/Stravix-logo.svg" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
+    <img src="https://www.stravix.in/assets/logos/stravix%20300%20by%20100.png" alt="StraviX Logo" style="width: 150px; margin-bottom: 10px;" />
     <h2 style="margin: 0; font-size: 12px;">Where Skills Meet Success</h2>
     <h2 style="margin: 0; font-size: 22px;">Action Required – KYC Rejected</h2>
   </div>

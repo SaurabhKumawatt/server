@@ -47,7 +47,8 @@ const {
   getTargetProgress,
   getUserTargetCampaigns,
   getUserTotalWatchTime,
-  getEarningsByDate
+  getEarningsByDate,
+  getUpcomingWebinars
 } = require("../controllers/userController");
 
 // 🔐 Middlewares
@@ -84,6 +85,8 @@ router.post(
   loginUser
 );
 
+
+router.get("/upcoming", getUpcomingWebinars);
 router.get("/logout", logoutUser);
 router.post("/forgot-password", forgotPassword);
 router.post("/verify-otp", verifyOtp);

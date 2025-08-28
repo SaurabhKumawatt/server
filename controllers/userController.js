@@ -230,17 +230,34 @@ exports.getLoggedInUserProfile = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    // ✅ Calculate total earnings
     const allCommissions = await Commissions.find({ userId: user._id });
     const totalEarnings = allCommissions.reduce((sum, c) => sum + c.amount, 0);
 
     const { determineAffiliateLevel } = require("../utils/levelsFn");
     const level = determineAffiliateLevel(totalEarnings);
 
+    // ✅ Check if level changed
     if (user.level !== level) {
+      const oldLevel = user.level;
       user.level = level;
       await user.save();
+
+      // 📩 Send unlock email
+      try {
+        const { sendLevelUnlockEmail } = require("../utils/email");
+        await sendLevelUnlockEmail({
+          to: user.email,
+          name: user.fullName,
+          level,
+        });
+        console.log(`📩 Level unlock mail sent to ${user.fullName}: ${oldLevel} → ${level}`);
+      } catch (mailErr) {
+        console.error("❌ Failed to send level unlock email:", mailErr.message);
+      }
     }
 
+    // ✅ Fetch sponsor details
     let sponsor = null;
     if (user.sponsorCode) {
       sponsor = await User.findOne({ affiliateCode: user.sponsorCode }).select("fullName");
@@ -256,6 +273,7 @@ exports.getLoggedInUserProfile = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch user profile" });
   }
 };
+
 
 
 // ✅ Update Profile
@@ -1762,5 +1780,50 @@ exports.getEarningsByDate = async (req, res) => {
   } catch (err) {
     console.error("❌ Error fetching earnings by date:", err);
     return res.status(500).json({ message: "Server error while fetching earnings" });
+  }
+};
+
+
+exports.getUpcomingWebinars = async (req, res) => {
+  try {
+    const now = new Date();
+    const todayStart = new Date(now.setHours(0, 0, 0, 0));
+    const todayEnd = new Date(now.setHours(23, 59, 59, 999));
+
+    // 1️⃣ Try fetching today's webinars
+    let webinars = await Webinar.find({
+      date: { $gte: todayStart, $lte: todayEnd },
+      status: "upcoming"
+    })
+      .select("title date time thumbnail status")
+      .sort({ time: 1 });
+
+    if (webinars.length > 0) {
+      return res.status(200).json(webinars);
+    }
+
+    // 2️⃣ Else fetch the next upcoming date
+    const nextWebinar = await Webinar.findOne({
+      date: { $gt: todayEnd },
+      status: "upcoming"
+    })
+      .select("date")
+      .sort({ date: 1 });
+
+    if (!nextWebinar) {
+      return res.status(200).json([]); // no upcoming webinars
+    }
+
+    webinars = await Webinar.find({
+      date: nextWebinar.date,
+      status: "upcoming"
+    })
+      .select("title date time thumbnail status")
+      .sort({ time: 1 });
+
+    return res.status(200).json(webinars);
+  } catch (err) {
+    console.error("❌ Error fetching upcoming webinars:", err);
+    res.status(500).json({ message: "Server error while fetching webinars" });
   }
 };

@@ -611,3 +611,46 @@ exports.sendLevelUnlockEmail = async ({ to, name, level }) => {
     `,
   });
 };
+
+exports.sendTripSuccessEmail = async ({ to, fullName }) => {
+  await transporter.sendMail({
+    from: `"StraviX" <${process.env.EMAIL_FROM}>`,
+    to,
+    subject: `You’re Registered for StraviX Success Meet – 2025!`,
+    html: `
+      <div style="width: 100%; margin: auto; font-family: Arial, sans-serif; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+  <!-- Header -->
+  <div style="background-color: #182432; padding: 20px; text-align: center; color: #fff;">
+    <img src="https://www.stravix.in/assets/logos/stravix%20300%20by%20100.png" alt="StraviX Logo" style="width: 150px;" />
+    <h2 style="margin: 0; font-size: 12px;">Where Skills Meet Success</h2>
+     <h2 style="margin: 0; font-size: 22px;">Registration Confirmed 🎉</h2>
+  </div>
+
+  <!-- Body -->
+  <div style="padding: 20px; color: #333; line-height: 1.6;">
+    <p>Hello <strong>${fullName}!</strong>,</p>
+
+    <p>We are excited to confirm your successful registration for the <strong>StraviX Success Meet – 2025</strong>. 
+    This is going to be a powerful experience of growth, networking, and success.</p>
+
+    <p style="margin: 20px 0; text-align: center;">
+      <a href="https://forms.gle/NGJFB6qij4cnUv1d7" target="_blank" style="background-color:#C7A055; color:#fff; padding:10px 20px; border-radius:6px; text-decoration:none; font-weight:bold;">
+        Fill Confirmation Form
+      </a>
+    </p>
+
+    <p>📅 Save the date and get ready to be part of an unforgettable meetup with the StraviX community.</p>
+
+    <p style="margin-top: 30px;">See you at the Success Meet! 🚀</p>
+    <p>Warm regards,<br/><strong>Team StraviX</strong></p>
+  </div>
+
+  <!-- Footer -->
+  <div style="background-color: #182432; text-align: center; padding: 10px; font-size: 12px; color: #999;">
+    © ${new Date().getFullYear()} StraviX. All rights reserved.
+  </div>
+</div>
+
+    `,
+  });
+};

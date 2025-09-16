@@ -110,6 +110,7 @@ app.use("/api/payments", require("./routes/paymentRoutes"));
 app.use("/api/enrollments", require("./routes/enrollmentRoutes"));
 app.use("/api/admin", require("./routes/adminRoutes"));
 app.use("/api/promotional", require("./routes/promotionalRoutes"));
+app.use("/api/trip", require("./routes/tripRegistrationRoutes"));
 
 
 // 🔍 404 Handler

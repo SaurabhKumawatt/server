@@ -26,28 +26,37 @@ exports.getUserByAffiliate = async (req, res) => {
 
 // ✅ Register trip + create Razorpay order
 exports.registerTrip = async (req, res) => {
-    try {
-        const { userId, whatsappNumber } = req.body;
-
-        const order = await razorpay.orders.create({
-            amount: 5000 * 100, // ₹5000
-            currency: "INR",
-            payment_capture: 1,
-        });
-
-        const trip = await TripRegistration.create({
-            userId,
-            whatsappNumber,
-            price: 5000,
-            razorpayOrderId: order.id,
-            paymentStatus: "created",
-        });
-
-        res.status(201).json({ order, trip });
-    } catch (err) {
-        console.error("registerTrip error:", err);
-        res.status(500).json({ message: "Failed to register trip" });
+  try {
+    if (!req.user?._id) {
+      return res.status(401).json({ message: "Not authorized" });
     }
+
+    const userId = req.user._id;   // ✅ direct from token
+    const { whatsappNumber } = req.body;
+
+    if (!whatsappNumber) {
+      return res.status(400).json({ message: "WhatsApp number is required" });
+    }
+
+    const order = await razorpay.orders.create({
+      amount: 5000 * 100, // ₹5000
+      currency: "INR",
+      payment_capture: 1,
+    });
+
+    const trip = await TripRegistration.create({
+      userId,
+      whatsappNumber,
+      price: 5000,
+      razorpayOrderId: order.id,
+      paymentStatus: "created",
+    });
+
+    res.status(201).json({ order, trip });
+  } catch (err) {
+    console.error("registerTrip error:", err.message);
+    res.status(500).json({ message: "Failed to register trip", error: err.message });
+  }
 };
 
 // ✅ Webhook (payment verify + send mail)

@@ -39,7 +39,7 @@ exports.registerTrip = async (req, res) => {
     }
 
     const order = await razorpay.orders.create({
-      amount: 5000 * 100, // ₹5000
+      amount: 5 * 100, // ₹5000
       currency: "INR",
       payment_capture: 1,
     });
@@ -47,7 +47,7 @@ exports.registerTrip = async (req, res) => {
     const trip = await TripRegistration.create({
       userId,
       whatsappNumber,
-      price: 5000,
+      price: 5,
       razorpayOrderId: order.id,
       paymentStatus: "created",
     });
